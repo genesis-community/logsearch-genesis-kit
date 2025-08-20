@@ -15,14 +15,14 @@ use Genesis::UI qw/prompt_for prompt_for_boolean/;
 sub init {
   my ($class, %ops) = @_;
   my $obj = $class->SUPER::init(%ops);
-  $obj->check_minimum_genesis_version('2.8.12');
-  
+  $obj->check_minimum_genesis_version('3.1.0');
+
   # Initialize wizard state
   $obj->{features} = [];
   $obj->{base_domain} = '';
   $obj->{cluster_size} = 'medium';
   $obj->{storage_backend} = 'none';
-  
+
   return $obj;
 }
 
@@ -71,22 +71,22 @@ sub perform {
 # ask_base_domain - Prompt for base domain {{{
 sub ask_base_domain {
   my ($self) = @_;
-  
+
   info("First, let's configure the base domain for your Logsearch deployment.");
   info("This will be used for Kibana, Elasticsearch, and Logstash endpoints.");
   info("");
-  
+
   $self->{base_domain} = prompt_for(
     'text',
     'What is your base domain?',
     --valid => sub {
       my $domain = shift;
       return $domain =~ /^[a-zA-Z0-9]([a-zA-Z0-9\-\.]*[a-zA-Z0-9])?$/
-        ? undef 
+        ? undef
         : "Invalid domain format";
     }
   );
-  
+
   info("");
   info("Your Logsearch endpoints will be:");
   info("  Kibana:        https://kibana.%s", $self->{base_domain});
@@ -99,10 +99,10 @@ sub ask_base_domain {
 # ask_deployment_size - Prompt for cluster sizing {{{
 sub ask_deployment_size {
   my ($self) = @_;
-  
+
   info("Next, let's determine the size of your Logsearch deployment.");
   info("");
-  
+
   $self->{cluster_size} = prompt_for(
     'select',
     'What size deployment would you like?',
@@ -111,7 +111,7 @@ sub ask_deployment_size {
     -o => '[large]  High-Volume Production (6+ ES nodes, high resources)',
     --default => 'medium'
   );
-  
+
   if ($self->{cluster_size} eq 'small') {
     push @{$self->{features}}, 'small-footprint';
     info("");
@@ -142,14 +142,14 @@ sub ask_deployment_size {
 # ask_storage_backend - Prompt for storage backend {{{
 sub ask_storage_backend {
   my ($self) = @_;
-  
+
   info("For Elasticsearch snapshots and backups, you can configure cloud storage.");
   info("");
-  
+
   my $wants_storage = prompt_for_boolean(
     'Would you like to configure cloud storage for backups?'
   );
-  
+
   if ($wants_storage) {
     $self->{storage_backend} = prompt_for(
       'select',
@@ -160,13 +160,13 @@ sub ask_storage_backend {
       -o => '[none]  Skip storage configuration',
       --default => 's3'
     );
-    
+
     if ($self->{storage_backend} ne 'none') {
       push @{$self->{features}}, $self->{storage_backend} . '-blobstore';
       info("");
       info("Selected %s storage backend.", uc($self->{storage_backend}));
       info("Remember to configure the required parameters in your environment file:");
-      
+
       if ($self->{storage_backend} eq 's3') {
         info("  - params.s3_bucket");
         info("  - params.s3_region");
@@ -186,14 +186,14 @@ sub ask_storage_backend {
 # ask_monitoring - Prompt for monitoring features {{{
 sub ask_monitoring {
   my ($self) = @_;
-  
+
   info("Logsearch can be integrated with monitoring systems.");
   info("");
-  
+
   my $wants_monitoring = prompt_for_boolean(
     'Would you like to enable Prometheus monitoring exporters?'
   );
-  
+
   if ($wants_monitoring) {
     push @{$self->{features}}, 'prometheus-monitoring';
     info("");
@@ -203,11 +203,11 @@ sub ask_monitoring {
     info("  - Node metrics: :9100/metrics");
     info("");
   }
-  
+
   my $wants_alerting = prompt_for_boolean(
     'Would you like to enable built-in alerting rules?'
   );
-  
+
   if ($wants_alerting) {
     push @{$self->{features}}, 'alerting';
     info("");
@@ -220,14 +220,14 @@ sub ask_monitoring {
 # ask_log_integration - Prompt for log source integration {{{
 sub ask_log_integration {
   my ($self) = @_;
-  
+
   info("Logsearch can be pre-configured for specific log sources.");
   info("");
-  
+
   my $wants_cf = prompt_for_boolean(
     'Will you be ingesting CloudFoundry logs?'
   );
-  
+
   if ($wants_cf) {
     push @{$self->{features}}, 'cf-integration';
     info("");
@@ -243,22 +243,22 @@ sub ask_log_integration {
 # ask_additional_features - Prompt for additional features {{{
 sub ask_additional_features {
   my ($self) = @_;
-  
+
   info("Finally, let's configure some additional features.");
   info("");
-  
+
   my $wants_custom_parsers = prompt_for_boolean(
     'Would you like to include custom log parsing rules for common formats (nginx, apache, etc.)?'
   );
-  
+
   if ($wants_custom_parsers) {
     push @{$self->{features}}, 'custom-parsers';
   }
-  
+
   my $wants_enhanced_curator = prompt_for_boolean(
     'Would you like enhanced index lifecycle management with Curator?'
   );
-  
+
   if ($wants_enhanced_curator) {
     push @{$self->{features}}, 'enhanced-curator';
   }
@@ -268,25 +268,25 @@ sub ask_additional_features {
 # generate_environment_file - Generate the environment YAML content {{{
 sub generate_environment_file {
   my ($self) = @_;
-  
+
   my $content = "---\n";
   $content .= "kit:\n";
   $content .= "  name:    $ENV{GENESIS_KIT_NAME}\n";
   $content .= "  version: $ENV{GENESIS_KIT_VERSION}\n";
-  
+
   if (@{$self->{features}}) {
     $content .= "  features:\n";
     for my $feature (@{$self->{features}}) {
       $content .= "  - $feature\n";
     }
   }
-  
+
   $content .= "\n";
   $content .= $self->env->genesis_config_block;
-  
+
   $content .= "params:\n";
   $content .= "  base_domain: $self->{base_domain}\n";
-  
+
   # Add sizing parameters based on cluster size
   if ($self->{cluster_size} eq 'large') {
     $content .= "  elasticsearch_instances: 6\n";
@@ -302,7 +302,7 @@ sub generate_environment_file {
     $content .= "  logstash_heap_size: \"512m\"\n";
   }
   # Medium size uses defaults from kit.yml
-  
+
   # Add placeholder storage parameters
   if ($self->{storage_backend} eq 's3') {
     $content .= "\n";
@@ -320,7 +320,7 @@ sub generate_environment_file {
     $content .= "  # gcs_bucket: my-logsearch-snapshots\n";
     $content .= "  # gcp_project_id: my-project-id\n";
   }
-  
+
   return $content;
 }
 # }}}
@@ -328,7 +328,7 @@ sub generate_environment_file {
 # show_next_steps - Display post-creation instructions {{{
 sub show_next_steps {
   my ($self) = @_;
-  
+
   info("");
   info("Environment file created successfully!");
   info("");

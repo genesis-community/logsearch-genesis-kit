@@ -13,7 +13,7 @@ use Genesis qw/bail info warning run/;
 sub init {
   my $class = shift;
   my $obj = $class->SUPER::init(@_);
-  $obj->check_minimum_genesis_version('2.8.12');
+  $obj->check_minimum_genesis_version('3.1.0');
   return $obj;
 }
 
@@ -24,21 +24,21 @@ sub cmd_details {
 sub perform {
   my ($self) = @_;
   my $env = $self->env;
-  
+
   # Get base domain for constructing URL
   my $base_domain = $env->lookup('params.base_domain', '');
   bail("Missing base_domain parameter") unless $base_domain;
-  
+
   my $kibana_url = "https://kibana.$base_domain";
-  
+
   info("");
   info("Opening Kibana in your default browser...");
   info("URL: %s", $kibana_url);
   info("");
-  
+
   # Try to detect the platform and open the appropriate browser
   my $open_cmd;
-  
+
   if ($^O eq 'darwin') {
     # macOS
     $open_cmd = "open '$kibana_url'";
@@ -53,9 +53,9 @@ sub perform {
     info("Please manually open: %s", $kibana_url);
     return $self->done();
   }
-  
+
   my ($output, $rc) = run({interactive => 0}, $open_cmd);
-  
+
   if ($rc == 0) {
     info("Successfully opened Kibana in browser");
     info("");
@@ -73,7 +73,7 @@ sub perform {
     info("Please manually open: %s", $kibana_url);
     info("");
   }
-  
+
   return $self->done();
 }
 # }}}

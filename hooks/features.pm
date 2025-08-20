@@ -14,7 +14,7 @@ use Genesis qw(new_enough);
 sub init {
 	my ( $class, %ops ) = @_;
 	my $obj = $class->SUPER::init(%ops);
-	$obj->check_minimum_genesis_version('2.8.12');
+	$obj->check_minimum_genesis_version('3.1.0');
 	return $obj;
 }
 
