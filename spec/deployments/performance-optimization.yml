@@ -1,0 +1,17 @@
+---
+kit:
+  features:
+  - performance-optimization
+
+genesis:
+  env: performance-optimization
+
+params:
+  base_domain: logsearch.performance.example.com
+  elasticsearch_heap_size: 8g
+  logstash_heap_size: 4g
+  kibana_memory_limit: 2g
+  elasticsearch_thread_pool_size: 16
+  elasticsearch_bulk_queue_size: 500
+  logstash_pipeline_workers: 8
+  logstash_pipeline_batch_size: 250

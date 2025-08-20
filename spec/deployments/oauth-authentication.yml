@@ -1,0 +1,16 @@
+---
+kit:
+  features:
+  - oauth-authentication
+
+genesis:
+  env: oauth-authentication
+
+params:
+  base_domain: logsearch.oauth.example.com
+  oauth_provider: github
+  oauth_discovery_url: https://github.com
+  oauth_authorized_domains:
+  - example.com
+  oauth_admin_groups:
+  - logsearch-admins

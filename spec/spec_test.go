@@ -130,4 +130,36 @@ var _ = Describe("Logsearch Kit", func() {
 			CPI:         "aws",
 		})
 	})
+
+	Describe("Advanced Features", func() {
+		Test(Environment{
+			Name:        "oauth-authentication",
+			CloudConfig: "aws",
+			CPI:         "aws",
+		})
+		
+		Test(Environment{
+			Name:        "shield-integration",
+			CloudConfig: "aws",
+			CPI:         "aws",
+		})
+		
+		Test(Environment{
+			Name:        "bosh-integration",
+			CloudConfig: "aws",
+			CPI:         "aws",
+		})
+		
+		Test(Environment{
+			Name:        "multi-region",
+			CloudConfig: "aws",
+			CPI:         "aws",
+		})
+		
+		Test(Environment{
+			Name:        "performance-optimization",
+			CloudConfig: "aws",
+			CPI:         "aws",
+		})
+	})
 })

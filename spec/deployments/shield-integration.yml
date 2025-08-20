@@ -1,0 +1,13 @@
+---
+kit:
+  features:
+  - shield-integration
+
+genesis:
+  env: shield-integration
+
+params:
+  base_domain: logsearch.shield.example.com
+  shield_endpoint: https://shield.example.com
+  shield_retention_policy: weekly
+  shield_backup_schedule: "daily 2am"

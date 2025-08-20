@@ -74,6 +74,26 @@ sub perform {
       $self->add_files('manifests/addons/alerting.yml');
       $self->validate_alerting_params();
       
+    } elsif ($feature eq 'oauth-authentication') {
+      $self->add_files('manifests/features/oauth-authentication.yml');
+      $self->validate_oauth_params();
+      
+    } elsif ($feature eq 'shield-integration') {
+      $self->add_files('manifests/features/shield-integration.yml');
+      $self->validate_shield_params();
+      
+    } elsif ($feature eq 'bosh-integration') {
+      $self->add_files('manifests/features/bosh-integration.yml');
+      $self->validate_bosh_params();
+      
+    } elsif ($feature eq 'multi-region') {
+      $self->add_files('manifests/features/multi-region.yml');
+      $self->validate_multi_region_params();
+      
+    } elsif ($feature eq 'performance-optimization') {
+      $self->add_files('manifests/features/performance-optimization.yml');
+      $self->validate_performance_params();
+      
     } else {
       push @invalid_features, $feature;
     }
@@ -206,6 +226,119 @@ sub validate_alerting_params {
   } else {
     warning("No alert_email configured - alerts will not be sent via email");
   }
+}
+# }}}
+
+# validate_oauth_params - Validate OAuth authentication parameters {{{
+sub validate_oauth_params {
+  my ($self) = @_;
+  
+  my $provider = $self->env->lookup('params.oauth_provider', '');
+  bail("Missing required parameter 'params.oauth_provider' for oauth-authentication feature") unless $provider;
+  
+  my @valid_providers = qw(github google azure okta custom);
+  bail("Invalid oauth_provider: '%s' (valid options: %s)", $provider, join(', ', @valid_providers))
+    unless grep { $_ eq $provider } @valid_providers;
+  
+  my $discovery_url = $self->env->lookup('params.oauth_discovery_url', '');
+  bail("Missing required parameter 'params.oauth_discovery_url' for oauth-authentication feature") unless $discovery_url;
+  
+  bail("Invalid oauth_discovery_url format: '%s'", $discovery_url)
+    unless $discovery_url =~ /^https?:\/\/.+/;
+    
+  info("OAuth authentication configured with provider: %s", $provider);
+}
+# }}}
+
+# validate_shield_params - Validate Shield integration parameters {{{
+sub validate_shield_params {
+  my ($self) = @_;
+  
+  my $endpoint = $self->env->lookup('params.shield_endpoint', '');
+  bail("Missing required parameter 'params.shield_endpoint' for shield-integration feature") unless $endpoint;
+  
+  bail("Invalid shield_endpoint format: '%s'", $endpoint)
+    unless $endpoint =~ /^https?:\/\/.+/;
+    
+  my $schedule = $self->env->lookup('params.shield_backup_schedule', 'daily 4am');
+  bail("Invalid shield_backup_schedule format: '%s'", $schedule)
+    unless $schedule =~ /^(hourly|daily|weekly)(\s+\d+[ap]m)?$/;
+    
+  info("Shield backup integration configured with endpoint: %s", $endpoint);
+}
+# }}}
+
+# validate_bosh_params - Validate BOSH integration parameters {{{
+sub validate_bosh_params {
+  my ($self) = @_;
+  
+  my $director_url = $self->env->lookup('params.bosh_director_url', '');
+  bail("Missing required parameter 'params.bosh_director_url' for bosh-integration feature") unless $director_url;
+  
+  bail("Invalid bosh_director_url format: '%s'", $director_url)
+    unless $director_url =~ /^https?:\/\/.+/;
+    
+  my $retention = $self->env->lookup('params.bosh_log_retention_days', 30);
+  bail("bosh_log_retention_days must be a positive integer, got: %s", $retention)
+    unless $retention =~ /^\d+$/ && $retention > 0;
+    
+  info("BOSH log integration configured with director: %s", $director_url);
+}
+# }}}
+
+# validate_multi_region_params - Validate multi-region parameters {{{
+sub validate_multi_region_params {
+  my ($self) = @_;
+  
+  my $primary_region = $self->env->lookup('params.primary_region', '');
+  bail("Missing required parameter 'params.primary_region' for multi-region feature") unless $primary_region;
+  
+  my $regions = $self->env->lookup('params.regions', []);
+  bail("Missing required parameter 'params.regions' for multi-region feature") 
+    unless ref($regions) eq 'ARRAY' && @$regions > 0;
+    
+  bail("Primary region '%s' must be included in regions list", $primary_region)
+    unless grep { $_ eq $primary_region } @$regions;
+    
+  my $azs = $self->env->lookup('params.availability_zones', []);
+  bail("Missing required parameter 'params.availability_zones' for multi-region feature") 
+    unless ref($azs) eq 'ARRAY' && @$azs > 0;
+    
+  info("Multi-region cluster configured with primary region: %s", $primary_region);
+}
+# }}}
+
+# validate_performance_params - Validate performance optimization parameters {{{
+sub validate_performance_params {
+  my ($self) = @_;
+  
+  # Validate heap sizes if provided
+  my $es_heap = $self->env->lookup('params.elasticsearch_heap_size', '');
+  if ($es_heap) {
+    bail("Invalid elasticsearch_heap_size format: '%s' (expected format: 2g, 512m)", $es_heap)
+      unless $es_heap =~ /^\d+[gGmM]$/;
+  }
+  
+  my $logstash_heap = $self->env->lookup('params.logstash_heap_size', '');
+  if ($logstash_heap) {
+    bail("Invalid logstash_heap_size format: '%s' (expected format: 2g, 512m)", $logstash_heap)
+      unless $logstash_heap =~ /^\d+[gGmM]$/;
+  }
+  
+  my $kibana_memory = $self->env->lookup('params.kibana_memory_limit', '');
+  if ($kibana_memory) {
+    bail("Invalid kibana_memory_limit format: '%s' (expected format: 2g, 512m)", $kibana_memory)
+      unless $kibana_memory =~ /^\d+[gGmM]$/;
+  }
+  
+  # Validate thread pool settings
+  my $thread_pool = $self->env->lookup('params.elasticsearch_thread_pool_size', 'auto');
+  unless ($thread_pool eq 'auto') {
+    bail("elasticsearch_thread_pool_size must be 'auto' or a positive integer, got: %s", $thread_pool)
+      unless $thread_pool =~ /^\d+$/ && $thread_pool > 0;
+  }
+  
+  info("Performance optimization feature enabled");
 }
 # }}}
 

@@ -1,0 +1,42 @@
+#!/bin/bash
+#
+# ci/scripts/build-kit
+#
+# Script for building a Genesis kit for distribution
+#
+
+set -eu
+
+header() {
+  echo "#############################"
+  echo "## $1"
+  echo "#############################"
+  echo
+}
+
+cd "${REPO_ROOT:?required}"
+
+VERSION=$(cat "${VERSION_FROM:?required}/version")
+header "Building v${VERSION} of the logsearch Genesis Kit..."
+
+# Check that kit.yml contains the right version
+want=$(cat kit.yml | spruce json | jq -r '.version // empty')
+if [[ -z ${want} ]]; then
+  echo >&2 "FAILED: kit.yml does not contain a 'version' key"
+  exit 1
+fi
+
+if [[ ${want} != ${VERSION} ]]; then
+  echo >&2 "FAILED: kit.yml version (${want}) does not match expected version (${VERSION})"
+  exit 1
+fi
+
+# Build the kit
+header "Compiling Genesis Kit"
+mkdir -p "${REPO_OUT:?required}"
+genesis compile-kit --name logsearch --version "${VERSION}" \
+                    --output "${REPO_OUT}/logsearch-${VERSION}.tar.gz" \
+                    .
+
+echo "Build complete."
+echo "Kit: logsearch-${VERSION}.tar.gz"

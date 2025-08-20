@@ -1,0 +1,47 @@
+---
+meta:
+  kit:             logsearch
+  release:         Logsearch Genesis Kit
+  target:          pipes/genesis
+  url:             https://pipes.scalecf.net
+  iaas:            aws
+  exposed:         false
+  version_file:    version
+  initial_version: 1.0.0
+
+  upstream:
+    bosh_releases:
+    - name:       logsearch
+      type:       github-release
+      repository: cloudfoundry-community/logsearch-boshrelease
+      path:       kit.yml
+      version:    "211.1.0"
+
+  bosh:
+    uri:      ((bosh.uri))
+    username: ((bosh.username))
+    password: ((bosh.password))
+    cacert:   ((bosh.ca))
+
+  vault:
+    url:       ((vault.url))
+    token:     ((vault.token))
+
+  aws:
+    access_key: ((cloudfoundry-community-aws.access_key_id))
+    secret_key: ((cloudfoundry-community-aws.secret_access_key))
+
+  github:
+    owner:        genesis-community
+    repo:         logsearch-genesis-kit
+    branch:       develop
+    main-branch:  main
+    private_key:  ((github.private_key))
+    access_token: ((github.access_token))
+    name:         ((github.name))
+    email:        ((github.email))
+
+  shout:
+    url:      ((shout.url))
+    username: ((shout.username))
+    password: ((shout.password))

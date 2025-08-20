@@ -1,0 +1,31 @@
+#!/bin/bash
+#
+# ci/scripts/spec-check
+#
+# Script for checking a Genesis kit's spec/ tests
+#
+
+set -eu
+
+header() {
+  echo "#############################"
+  echo "## $1"
+  echo "#############################"
+  echo
+}
+
+cd "${REPO_ROOT:?required}"
+
+header "Fetching Dependencies..."
+cd spec
+go version
+go mod download
+
+header "Running Kit Spec Tests..."
+set +e
+ginkgo -r .
+rc=$?
+set -e
+
+header "Spec check complete."
+exit $rc

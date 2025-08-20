@@ -1,0 +1,94 @@
+---
+meta:
+  oauth:
+    provider: (( param "Please specify the OAuth provider (github, google, azure, okta, custom)" ))
+    client_id: (( vault meta.vault "/oauth:client_id" ))
+    client_secret: (( vault meta.vault "/oauth:client_secret" ))
+    discovery_url: (( param "Please specify the OAuth discovery URL for your provider" ))
+    redirect_url: (( concat "https://kibana." params.base_domain "/api/security/oidc/callback" ))
+    
+    # Provider-specific defaults
+    github:
+      discovery_url: https://github.com
+      user_endpoint: https://api.github.com/user
+      orgs_endpoint: https://api.github.com/user/orgs
+      
+    google:
+      discovery_url: https://accounts.google.com/.well-known/openid_configuration
+      
+    azure:
+      discovery_url: (( concat "https://login.microsoftonline.com/" params.azure_tenant_id "/.well-known/openid_configuration" ))
+      
+    okta:
+      discovery_url: (( concat params.okta_domain "/.well-known/openid_configuration" ))
+
+releases:
+- name: elasticsearch
+  version: latest
+
+instance_groups:
+- name: kibana
+  jobs:
+  - name: kibana
+    properties:
+      kibana:
+        config:
+          xpack.security.authc.providers:
+            oidc.oidc1:
+              order: 0
+              realm: "oidc1"
+              description: "Log in with SSO"
+          xpack.security.authc.oidc.realm: "oidc1"
+          
+        elasticsearch:
+          security:
+            authc:
+              realms:
+                oidc:
+                  oidc1:
+                    order: 2
+                    rp.client_id: (( grab meta.oauth.client_id ))
+                    rp.response_type: code
+                    rp.redirect_uri: (( grab meta.oauth.redirect_url ))
+                    op.issuer: (( grab meta.oauth.discovery_url ))
+                    op.authorization_endpoint: (( concat meta.oauth.discovery_url "/auth" ))
+                    op.token_endpoint: (( concat meta.oauth.discovery_url "/token" ))
+                    op.userinfo_endpoint: (( concat meta.oauth.discovery_url "/userinfo" ))
+                    op.jwkset_path: (( concat meta.oauth.discovery_url "/jwks" ))
+                    rp.signature_algorithm: RS256
+                    rp.client_secret: (( grab meta.oauth.client_secret ))
+                    claims.principal: sub
+                    claims.name: name
+                    claims.mail: email
+                    claims.groups: groups
+
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        config:
+          xpack.security.authc.realms.oidc.oidc1:
+            order: 2
+            rp.client_id: (( grab meta.oauth.client_id ))
+            rp.response_type: code
+            rp.redirect_uri: (( grab meta.oauth.redirect_url ))
+            op.issuer: (( grab meta.oauth.discovery_url ))
+            op.authorization_endpoint: (( concat meta.oauth.discovery_url "/auth" ))
+            op.token_endpoint: (( concat meta.oauth.discovery_url "/token" ))
+            op.userinfo_endpoint: (( concat meta.oauth.discovery_url "/userinfo" ))
+            op.jwkset_path: (( concat meta.oauth.discovery_url "/jwks" ))
+            rp.signature_algorithm: RS256
+            rp.client_secret: (( grab meta.oauth.client_secret ))
+            claims.principal: sub
+            claims.name: name
+            claims.mail: email
+            claims.groups: groups
+
+params:
+  oauth_provider: ~
+  oauth_discovery_url: ~
+  oauth_authorized_domains: []
+  oauth_admin_groups: []
+  azure_tenant_id: ~
+  okta_domain: ~

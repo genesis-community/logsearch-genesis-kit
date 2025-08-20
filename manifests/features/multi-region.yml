@@ -1,0 +1,143 @@
+---
+meta:
+  multi_region:
+    primary_region: (( grab params.primary_region || "us-west-2" ))
+    secondary_regions: (( grab params.secondary_regions || [] ))
+    cross_region_replication: (( grab params.cross_region_replication || false ))
+    region_awareness: (( grab params.region_awareness || true ))
+    
+    cluster_settings:
+      minimum_master_nodes: (( grab params.minimum_master_nodes || 2 ))
+      discovery_zen_minimum_master_nodes: (( grab params.minimum_master_nodes || 2 ))
+      cluster_routing_allocation_awareness_attributes: "zone,region"
+      cluster_routing_allocation_awareness_force_zone_values: (( join "," params.availability_zones ))
+      cluster_routing_allocation_awareness_force_region_values: (( join "," params.regions ))
+
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        config:
+          # Multi-region cluster configuration
+          cluster.name: (( concat params.cluster_name "-" meta.multi_region.primary_region ))
+          node.attr.region: (( grab meta.multi_region.primary_region ))
+          node.attr.zone: (( grab spec.az ))
+          
+          # Discovery configuration for multi-region
+          discovery.zen.ping.unicast.hosts: (( grab params.unicast_hosts ))
+          discovery.zen.minimum_master_nodes: (( grab meta.multi_region.cluster_settings.minimum_master_nodes ))
+          
+          # Allocation awareness
+          cluster.routing.allocation.awareness.attributes: (( grab meta.multi_region.cluster_settings.cluster_routing_allocation_awareness_attributes ))
+          cluster.routing.allocation.awareness.force.zone.values: (( grab meta.multi_region.cluster_settings.cluster_routing_allocation_awareness_force_zone_values ))
+          cluster.routing.allocation.awareness.force.region.values: (( grab meta.multi_region.cluster_settings.cluster_routing_allocation_awareness_force_region_values ))
+          
+          # Cross-region replication settings
+          cluster.routing.allocation.cluster_concurrent_rebalance: 2
+          cluster.routing.allocation.node_concurrent_recoveries: 2
+          cluster.routing.allocation.same_shard.host: false
+          
+          # Network settings for cross-region
+          network.host: 0.0.0.0
+          transport.host: 0.0.0.0
+          transport.bind_host: 0.0.0.0
+          transport.publish_host: (( grab spec.address ))
+          
+          # Gateway recovery settings
+          gateway.recover_after_nodes: (( grab params.recover_after_nodes || 3 ))
+          gateway.expected_nodes: (( grab params.expected_nodes || 5 ))
+          gateway.recover_after_time: "5m"
+
+- name: elasticsearch-data
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        config:
+          node.attr.region: (( grab meta.multi_region.primary_region ))
+          node.attr.zone: (( grab spec.az ))
+          cluster.routing.allocation.awareness.attributes: (( grab meta.multi_region.cluster_settings.cluster_routing_allocation_awareness_attributes ))
+
+- name: logstash
+  jobs:
+  - name: logstash
+    properties:
+      logstash:
+        conf: |
+          output {
+            if [@metadata][index] {
+              elasticsearch {
+                hosts => [<%= p('elasticsearch.master_hosts').map{|h| "\"#{h}\""}.join(',') %>]
+                index => "%{[@metadata][index]}-%{+YYYY.MM.dd}"
+                
+                # Multi-region routing
+                routing => "%{[@metadata][region]}"
+                
+                # Template management
+                template_name => "multi-region-logs"
+                template => "/var/vcap/jobs/logstash/config/multi-region-template.json"
+                template_overwrite => true
+                
+                # Failure handling
+                document_id => "%{[@metadata][fingerprint]}"
+              }
+            }
+          }
+
+- name: kibana
+  jobs:
+  - name: kibana
+    properties:
+      kibana:
+        config:
+          # Regional Kibana configuration
+          server.name: (( concat "kibana-" meta.multi_region.primary_region ))
+          elasticsearch.tribe.t1.tribe.name: (( concat params.cluster_name "-" meta.multi_region.primary_region ))
+          
+          # Cross-region search configuration
+          elasticsearch.tribe.t1.discovery.zen.ping.unicast.hosts: (( grab params.unicast_hosts ))
+          elasticsearch.tribe.on_conflict: prefer_t1
+
+# Cross-region index templates
+- name: maintenance
+  jobs:
+  - name: elasticsearch-config
+    release: logsearch
+    properties:
+      elasticsearch:
+        templates:
+          multi_region_logs:
+            index_patterns: ["logs-*", "metrics-*", "events-*"]
+            settings:
+              number_of_shards: (( grab params.shards_per_index || 3 ))
+              number_of_replicas: (( grab params.replicas_per_shard || 1 ))
+              
+              # Cross-region allocation
+              "index.routing.allocation.require.region": (( grab meta.multi_region.primary_region ))
+              "index.routing.allocation.include.zone": "*"
+              
+              # Performance settings
+              "index.refresh_interval": "30s"
+              "index.translog.durability": "async"
+              "index.translog.sync_interval": "30s"
+              
+              # Lifecycle management
+              "index.lifecycle.name": "multi-region-policy"
+              "index.lifecycle.rollover_alias": "logs-write"
+
+params:
+  primary_region: us-west-2
+  secondary_regions: []
+  regions: []
+  availability_zones: []
+  cross_region_replication: false
+  region_awareness: true
+  minimum_master_nodes: 2
+  recover_after_nodes: 3
+  expected_nodes: 5
+  shards_per_index: 3
+  replicas_per_shard: 1
+  unicast_hosts: []
+  cluster_name: logsearch

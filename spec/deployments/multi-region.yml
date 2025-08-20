@@ -1,0 +1,22 @@
+---
+kit:
+  features:
+  - multi-region
+
+genesis:
+  env: multi-region
+
+params:
+  base_domain: logsearch.multiregion.example.com
+  primary_region: us-west-2
+  regions:
+  - us-west-2
+  - us-east-1
+  availability_zones:
+  - us-west-2a
+  - us-west-2b
+  - us-west-2c
+  - us-east-1a
+  - us-east-1b
+  cross_region_replication: true
+  minimum_master_nodes: 3

@@ -1,0 +1,243 @@
+---
+meta:
+  performance:
+    elasticsearch:
+      heap_size: (( grab params.elasticsearch_heap_size || "4g" ))
+      gc_settings: (( grab params.elasticsearch_gc_settings || "G1GC" ))
+      thread_pool_size: (( grab params.elasticsearch_thread_pool_size || "auto" ))
+      bulk_queue_size: (( grab params.elasticsearch_bulk_queue_size || 200 ))
+      search_queue_size: (( grab params.elasticsearch_search_queue_size || 1000 ))
+    
+    logstash:
+      heap_size: (( grab params.logstash_heap_size || "2g" ))
+      pipeline_workers: (( grab params.logstash_pipeline_workers || "auto" ))
+      pipeline_batch_size: (( grab params.logstash_pipeline_batch_size || 125 ))
+      pipeline_batch_delay: (( grab params.logstash_pipeline_batch_delay || 5 ))
+    
+    kibana:
+      memory_limit: (( grab params.kibana_memory_limit || "1g" ))
+      optimize_bundles: (( grab params.kibana_optimize_bundles || true ))
+
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        heap_size: (( grab meta.performance.elasticsearch.heap_size ))
+        
+        config:
+          # Performance-optimized settings
+          indices.memory.index_buffer_size: "20%"
+          indices.memory.min_index_buffer_size: "96mb"
+          indices.fielddata.cache.size: "40%"
+          indices.breaker.fielddata.limit: "60%"
+          indices.breaker.request.limit: "40%"
+          indices.breaker.total.limit: "70%"
+          
+          # Thread pool configuration
+          thread_pool.bulk.size: (( grab meta.performance.elasticsearch.thread_pool_size ))
+          thread_pool.bulk.queue_size: (( grab meta.performance.elasticsearch.bulk_queue_size ))
+          thread_pool.search.size: (( grab meta.performance.elasticsearch.thread_pool_size ))
+          thread_pool.search.queue_size: (( grab meta.performance.elasticsearch.search_queue_size ))
+          thread_pool.index.size: (( grab meta.performance.elasticsearch.thread_pool_size ))
+          
+          # Query cache settings
+          indices.queries.cache.size: "10%"
+          indices.requests.cache.size: "2%"
+          
+          # Recovery settings
+          cluster.routing.allocation.cluster_concurrent_rebalance: 2
+          cluster.routing.allocation.node_concurrent_recoveries: 2
+          cluster.routing.allocation.node_initial_primaries_recoveries: 4
+          indices.recovery.max_bytes_per_sec: "100mb"
+          indices.recovery.concurrent_streams: 3
+          
+          # Network settings
+          http.max_content_length: "100mb"
+          transport.tcp.compress: true
+          
+        jvm_options: |
+          # Heap settings
+          -Xms(( grab meta.performance.elasticsearch.heap_size ))
+          -Xmx(( grab meta.performance.elasticsearch.heap_size ))
+          
+          # GC settings
+          -XX:+Use(( grab meta.performance.elasticsearch.gc_settings ))
+          -XX:MaxGCPauseMillis=200
+          -XX:G1HeapRegionSize=16m
+          -XX:G1NewSizePercent=30
+          -XX:G1MaxNewSizePercent=40
+          -XX:+UnlockExperimentalVMOptions
+          -XX:+UseCGroupMemoryLimitForHeap
+          
+          # Performance optimizations
+          -XX:+AlwaysPreTouch
+          -XX:+UseStringDeduplication
+          -Djava.awt.headless=true
+          -Dfile.encoding=UTF-8
+          -Djna.nosys=true
+          -Djdk.io.permissionsUseCanonicalPath=true
+          -Dio.netty.noUnsafe=true
+          -Dio.netty.noKeySetOptimization=true
+          -Dio.netty.recycler.maxCapacityPerThread=0
+          -Dlog4j.shutdownHookEnabled=false
+          -Dlog4j2.disable.jmx=true
+
+- name: elasticsearch-data
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        heap_size: (( grab meta.performance.elasticsearch.heap_size ))
+        
+        config:
+          # Data node specific optimizations
+          node.master: false
+          node.data: true
+          node.ingest: false
+          
+          # Store settings
+          index.store.type: "niofs"
+          index.compound_format: false
+          
+          # Merge settings
+          index.merge.policy.max_merge_at_once: 10
+          index.merge.policy.segments_per_tier: 10
+          index.merge.scheduler.max_thread_count: 1
+          
+          # Translog settings
+          index.translog.durability: "async"
+          index.translog.sync_interval: "30s"
+          index.translog.flush_threshold_size: "512mb"
+          
+        jvm_options: |
+          # Same heap and GC settings as master nodes
+          -Xms(( grab meta.performance.elasticsearch.heap_size ))
+          -Xmx(( grab meta.performance.elasticsearch.heap_size ))
+          -XX:+Use(( grab meta.performance.elasticsearch.gc_settings ))
+          -XX:MaxGCPauseMillis=200
+          -XX:+AlwaysPreTouch
+          -XX:+UseStringDeduplication
+
+- name: logstash
+  jobs:
+  - name: logstash
+    properties:
+      logstash:
+        heap_size: (( grab meta.performance.logstash.heap_size ))
+        
+        jvm_options: |
+          # Heap settings
+          -Xms(( grab meta.performance.logstash.heap_size ))
+          -Xmx(( grab meta.performance.logstash.heap_size ))
+          
+          # GC settings for Logstash
+          -XX:+UseG1GC
+          -XX:MaxGCPauseMillis=100
+          -XX:+UseStringDeduplication
+          -XX:+AlwaysPreTouch
+          
+        conf: |
+          # Performance-optimized pipeline settings
+          pipeline.workers: (( grab meta.performance.logstash.pipeline_workers ))
+          pipeline.batch.size: (( grab meta.performance.logstash.pipeline_batch_size ))
+          pipeline.batch.delay: (( grab meta.performance.logstash.pipeline_batch_delay ))
+          
+          input {
+            beats {
+              port => 5044
+              
+              # Performance optimizations
+              congestion_threshold => 40
+              target_field_for_codec => "message"
+              
+              # Connection handling
+              client_inactivity_timeout => 60
+              include_codec_tag => false
+            }
+          }
+          
+          filter {
+            # Conditional processing to reduce CPU usage
+            if [fields][logtype] == "application" {
+              # Only parse application logs with grok
+              grok {
+                match => { "message" => "%{COMBINEDAPACHELOG}" }
+                tag_on_failure => ["_grokparsefailure_apache"]
+              }
+            }
+            
+            # Use mutate instead of ruby for simple field operations
+            mutate {
+              add_field => { "[@metadata][index]" => "logs-%{+YYYY.MM.dd}" }
+              remove_field => [ "agent", "ecs", "host", "input" ]
+            }
+          }
+          
+          output {
+            elasticsearch {
+              hosts => ["<%= p('elasticsearch.master_hosts') %>"]
+              index => "%{[@metadata][index]}"
+              
+              # Bulk settings for performance
+              flush_size => 500
+              idle_flush_time => 5
+              
+              # Template settings
+              template_name => "performance-optimized"
+              template => "/var/vcap/jobs/logstash/config/performance-template.json"
+              template_overwrite => true
+              
+              # Connection pooling
+              pool_max => 1000
+              pool_max_per_route => 100
+              
+              # Retry settings
+              retry_max_interval => 5
+              retry_initial_interval => 1
+            }
+          }
+
+- name: kibana
+  jobs:
+  - name: kibana
+    properties:
+      kibana:
+        memory_limit: (( grab meta.performance.kibana.memory_limit ))
+        
+        config:
+          # Performance optimizations
+          server.maxPayloadBytes: 1048576
+          elasticsearch.requestTimeout: 30000
+          elasticsearch.shardTimeout: 30000
+          elasticsearch.pingTimeout: 3000
+          
+          # Caching
+          optimize.enabled: (( grab meta.performance.kibana.optimize_bundles ))
+          optimize.bundleFilter: "!(.png|.gif|.jpg|.jpeg)$"
+          optimize.bundleDir: "/var/vcap/data/kibana/optimize/bundles"
+          
+          # Monitoring
+          ops.interval: 10000
+          
+          # Search settings
+          discover.sampleSize: 500
+          discover.aggs.terms.size: 20
+          
+        jvm_options: |
+          # Node.js memory settings
+          --max-old-space-size=(( calc meta.performance.kibana.memory_limit | sub "g" | mult 1024 | sub 512 ))
+
+params:
+  elasticsearch_heap_size: 4g
+  elasticsearch_gc_settings: G1GC
+  elasticsearch_thread_pool_size: auto
+  elasticsearch_bulk_queue_size: 200
+  elasticsearch_search_queue_size: 1000
+  logstash_heap_size: 2g
+  logstash_pipeline_workers: auto
+  logstash_pipeline_batch_size: 125
+  logstash_pipeline_batch_delay: 5
+  kibana_memory_limit: 1g
+  kibana_optimize_bundles: true

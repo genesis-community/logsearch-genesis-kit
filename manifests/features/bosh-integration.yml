@@ -1,0 +1,165 @@
+---
+meta:
+  bosh:
+    director_url: (( param "Please specify the BOSH director URL for log integration" ))
+    director_ca_cert: (( vault meta.vault "/bosh-ca:certificate" ))
+    client_id: (( vault meta.vault "/bosh-client:username" ))
+    client_secret: (( vault meta.vault "/bosh-client:password" ))
+    log_retention_days: (( grab params.bosh_log_retention_days || 30 ))
+
+instance_groups:
+- name: logstash
+  jobs:
+  - name: logstash
+    properties:
+      logstash:
+        conf: |
+          input {
+            # BOSH Director logs via syslog
+            syslog {
+              port => 5515
+              type => "bosh-director"
+              add_field => { "[@metadata][index]" => "bosh-director" }
+            }
+            
+            # BOSH VM logs via relp
+            relp {
+              port => 2514
+              type => "bosh-vm"
+              add_field => { "[@metadata][index]" => "bosh-vm" }
+            }
+            
+            # BOSH Metrics via beats
+            beats {
+              port => 5516
+              type => "bosh-metrics"
+              add_field => { "[@metadata][index]" => "bosh-metrics" }
+            }
+          }
+          
+          filter {
+            if [type] == "bosh-director" {
+              grok {
+                match => { "message" => "%{TIMESTAMP_ISO8601:timestamp} \[%{DATA:log_level}\] %{DATA:component}: %{GREEDYDATA:log_message}" }
+              }
+              
+              if [component] == "director" {
+                grok {
+                  match => { "log_message" => "Task %{INT:task_id} | %{GREEDYDATA:task_description}" }
+                  tag_on_failure => []
+                }
+              }
+              
+              if [component] == "worker" {
+                grok {
+                  match => { "log_message" => "Worker %{INT:worker_id}: %{GREEDYDATA:worker_message}" }
+                  tag_on_failure => []
+                }
+              }
+            }
+            
+            if [type] == "bosh-vm" {
+              grok {
+                match => { "message" => "%{TIMESTAMP_ISO8601:timestamp} %{DATA:vm_id} %{DATA:job_name}/%{INT:job_index}: %{GREEDYDATA:vm_message}" }
+              }
+              
+              # Parse common BOSH job logs
+              if [job_name] == "postgres" {
+                grok {
+                  match => { "vm_message" => "%{TIMESTAMP_ISO8601:postgres_timestamp} \[%{INT:postgres_pid}\] %{DATA:postgres_level}: %{GREEDYDATA:postgres_message}" }
+                  tag_on_failure => []
+                }
+              }
+              
+              if [job_name] == "nats" {
+                grok {
+                  match => { "vm_message" => "%{TIMESTAMP_ISO8601:nats_timestamp} \[%{INT:nats_pid}\] %{GREEDYDATA:nats_message}" }
+                  tag_on_failure => []
+                }
+              }
+            }
+            
+            if [type] == "bosh-metrics" {
+              # Parse BOSH HM metrics
+              if [fields][deployment] {
+                mutate {
+                  add_field => { "deployment" => "%{[fields][deployment]}" }
+                }
+              }
+              
+              if [fields][job] {
+                mutate {
+                  add_field => { "job_name" => "%{[fields][job]}" }
+                }
+              }
+              
+              if [fields][index] {
+                mutate {
+                  add_field => { "job_index" => "%{[fields][index]}" }
+                }
+              }
+            }
+            
+            # Common timestamp processing
+            if [timestamp] {
+              date {
+                match => [ "timestamp", "ISO8601" ]
+                remove_field => [ "timestamp" ]
+              }
+            }
+            
+            # Add deployment and environment context
+            mutate {
+              add_field => { 
+                "[@metadata][target_deployment]" => "%{deployment}"
+                "[@metadata][log_type]" => "%{type}"
+              }
+            }
+          }
+          
+          output {
+            elasticsearch {
+              hosts => ["<%= p('elasticsearch.master_hosts') %>"]
+              index => "bosh-%{[@metadata][log_type]}-%{+YYYY.MM.dd}"
+              template_name => "bosh-logs"
+              template => "/var/vcap/jobs/logstash/config/bosh-template.json"
+              template_overwrite => true
+            }
+          }
+
+- name: kibana
+  jobs:
+  - name: kibana
+    properties:
+      kibana:
+        config:
+          kibana.defaultAppId: "discover"
+          kibana.index: ".kibana-bosh"
+          
+        dashboards:
+          bosh_director_overview: |
+            {
+              "version": "7.10.0",
+              "objects": [
+                {
+                  "id": "bosh-director-overview",
+                  "type": "dashboard",
+                  "attributes": {
+                    "title": "BOSH Director Overview",
+                    "description": "Overview of BOSH Director activities and health",
+                    "panelsJSON": "[{\"gridData\":{\"x\":0,\"y\":0,\"w\":24,\"h\":15},\"panelIndex\":\"1\",\"embeddableConfig\":{},\"panelRefName\":\"panel_1\"}]",
+                    "timeRestore": false,
+                    "version": 1
+                  }
+                }
+              ]
+            }
+
+params:
+  bosh_director_url: ~
+  bosh_log_retention_days: 30
+  bosh_metrics_enabled: true
+  bosh_vm_logs_enabled: true
+  bosh_syslog_port: 5515
+  bosh_relp_port: 2514
+  bosh_beats_port: 5516

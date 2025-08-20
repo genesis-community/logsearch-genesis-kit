@@ -1,0 +1,71 @@
+---
+meta:
+  shield:
+    endpoint: (( param "Please specify the Shield endpoint URL for backup integration" ))
+    agent_public_key: (( vault meta.vault "/shield:agent_public_key" ))
+    core_public_key: (( vault meta.vault "/shield:core_public_key" ))
+    retention_policy: (( grab params.shield_retention_policy || "default" ))
+    schedule: (( grab params.shield_backup_schedule || "daily 4am" ))
+
+releases:
+- name: shield-agent
+  version: latest
+  url: https://github.com/starkandwayne/shield-boshrelease/releases/download/v8.8.0/shield-8.8.0.tgz
+  sha1: ((shield_release_sha1))
+
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: shield-agent
+    release: shield-agent
+    properties:
+      shield:
+        agent:
+          autoprovision: (( grab meta.shield.endpoint ))
+          public_key: (( grab meta.shield.agent_public_key ))
+          daemon:
+            log_level: info
+            listen_address: 0.0.0.0:5444
+            authorized_keys_file: /var/vcap/jobs/shield-agent/config/authorized_keys
+          core:
+            ca: (( vault meta.vault "/shield-ca:certificate" ))
+
+- name: elasticsearch-data
+  jobs:
+  - name: shield-agent
+    release: shield-agent
+    properties:
+      shield:
+        agent:
+          autoprovision: (( grab meta.shield.endpoint ))
+          public_key: (( grab meta.shield.agent_public_key ))
+          daemon:
+            log_level: info
+            listen_address: 0.0.0.0:5444
+            authorized_keys_file: /var/vcap/jobs/shield-agent/config/authorized_keys
+          core:
+            ca: (( vault meta.vault "/shield-ca:certificate" ))
+
+- name: maintenance
+  jobs:
+  - name: elasticsearch-backup-scripts
+    release: logsearch
+    properties:
+      elasticsearch:
+        backup:
+          shield_endpoint: (( grab meta.shield.endpoint ))
+          retention_policy: (( grab meta.shield.retention_policy ))
+          schedule: (( grab meta.shield.schedule ))
+          repository_settings:
+            type: fs
+            settings:
+              location: /var/vcap/store/elasticsearch-backups
+              compress: true
+              chunk_size: 1g
+
+params:
+  shield_endpoint: ~
+  shield_retention_policy: default
+  shield_backup_schedule: "daily 4am"
+  shield_compression: true
+  shield_chunk_size: 1g

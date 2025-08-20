@@ -1,0 +1,67 @@
+#!/bin/bash
+#
+# ci/scripts/test-deployment
+#
+# Script for testing a Logsearch deployment
+#
+
+set -eu
+
+header() {
+  echo "#############################"
+  echo "## $1"
+  echo "#############################"
+  echo
+}
+
+cd "${REPO_ROOT:?required}"
+
+header "Setting up test environment..."
+
+# Set up Genesis
+export GENESIS_HONOR_ENV=1
+export GENESIS_TESTING=1
+
+# Test base deployment
+header "Testing basic Logsearch deployment..."
+cd test-deployments
+
+# Initialize repository
+genesis init --kit logsearch test
+
+# Create test environment
+cd test
+genesis new test-env --no-secrets
+
+# Deploy (this would normally happen in a real BOSH environment)
+# genesis deploy test-env
+
+header "Testing feature combinations..."
+
+# Test small-footprint
+genesis new small-env --no-secrets
+echo "  features: [small-footprint]" >> small-env.yml
+
+# Test S3 blobstore
+genesis new s3-env --no-secrets
+cat >> s3-env.yml <<EOF
+  features: [s3-blobstore]
+params:
+  s3_bucket: test-bucket
+  s3_region: us-west-2
+EOF
+
+# Test monitoring
+genesis new monitoring-env --no-secrets
+echo "  features: [prometheus-monitoring, alerting]" >> monitoring-env.yml
+
+# Test CF integration
+genesis new cf-env --no-secrets
+cat >> cf-env.yml <<EOF
+  features: [cf-integration, custom-parsers]
+params:
+  cf_system_domain: system.cf.example.com
+EOF
+
+header "Deployment tests complete."
+echo "All test environments created successfully."

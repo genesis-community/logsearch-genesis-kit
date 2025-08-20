@@ -1,0 +1,13 @@
+---
+kit:
+  features:
+  - bosh-integration
+
+genesis:
+  env: bosh-integration
+
+params:
+  base_domain: logsearch.bosh.example.com
+  bosh_director_url: https://bosh.example.com:25555
+  bosh_log_retention_days: 60
+  bosh_metrics_enabled: true
