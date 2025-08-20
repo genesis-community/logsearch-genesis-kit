@@ -1,0 +1,23 @@
+---
+kit:
+  features:
+  - s3-blobstore
+  - prometheus-monitoring
+  - cf-integration
+  - enhanced-curator
+
+genesis:
+  env: production-s3
+
+params:
+  base_domain: logs.prod.example.com
+  elasticsearch_instances: 6
+  logstash_instances: 4
+  kibana_instances: 2
+  elasticsearch_heap_size: "16g"
+  logstash_heap_size: "4g"
+  s3_bucket: prod-logsearch-snapshots
+  s3_region: us-west-2
+  cf_system_domain: system.cf.example.com
+  cf_app_retention_days: 7
+  cf_platform_retention_days: 30

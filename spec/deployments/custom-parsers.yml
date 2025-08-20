@@ -1,0 +1,10 @@
+---
+kit:
+  features:
+  - custom-parsers
+
+genesis:
+  env: custom-parsers
+
+params:
+  base_domain: logsearch.parsers.example.com

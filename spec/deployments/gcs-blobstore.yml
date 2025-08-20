@@ -1,0 +1,12 @@
+---
+kit:
+  features:
+  - gcs-blobstore
+
+genesis:
+  env: gcs-blobstore
+
+params:
+  base_domain: logsearch.gcp.example.com
+  gcs_bucket: test-logsearch-snapshots
+  gcp_project_id: test-project-123

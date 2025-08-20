@@ -1,0 +1,14 @@
+---
+kit:
+  features:
+  - alerting
+
+genesis:
+  env: alerting
+
+params:
+  base_domain: logsearch.alerts.example.com
+  alert_email: admin@example.com
+  smtp_host: smtp.example.com
+  smtp_username: alerts@example.com
+  parse_failure_threshold: 100

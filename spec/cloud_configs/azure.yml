@@ -1,0 +1,67 @@
+azs:
+- name: z1
+  cloud_properties:
+    availability_zone: '1'
+- name: z2
+  cloud_properties:
+    availability_zone: '2'
+- name: z3
+  cloud_properties:
+    availability_zone: '3'
+
+vm_types:
+- name: default
+  cloud_properties:
+    instance_type: Standard_D2s_v3
+- name: small
+  cloud_properties:
+    instance_type: Standard_B2s
+- name: medium
+  cloud_properties:
+    instance_type: Standard_D2s_v3
+- name: large
+  cloud_properties:
+    instance_type: Standard_D4s_v3
+
+disk_types:
+- name: default
+  disk_size: 20_000
+  cloud_properties:
+    storage_account_type: Premium_LRS
+- name: small
+  disk_size: 10_000
+  cloud_properties:
+    storage_account_type: Premium_LRS
+- name: large
+  disk_size: 100_000
+  cloud_properties:
+    storage_account_type: Premium_LRS
+
+networks:
+- name: default
+  type: manual
+  subnets:
+  - range: 10.0.1.0/24
+    gateway: 10.0.1.1
+    azs: [z1]
+    static: [10.0.1.10-10.0.1.30]
+    cloud_properties:
+      virtual_network_name: vnet-logsearch
+      subnet_name: default
+- name: logsearch
+  type: manual
+  subnets:
+  - range: 10.0.2.0/24
+    gateway: 10.0.2.1
+    azs: [z1, z2, z3]
+    static: [10.0.2.10-10.0.2.50]
+    cloud_properties:
+      virtual_network_name: vnet-logsearch
+      subnet_name: logsearch
+
+compilation:
+  workers: 3
+  reuse_compilation_vms: true
+  az: z1
+  vm_type: large
+  network: default

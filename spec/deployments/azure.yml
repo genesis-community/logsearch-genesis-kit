@@ -1,0 +1,9 @@
+---
+kit:
+  features: []
+
+genesis:
+  env: azure
+
+params:
+  base_domain: logsearch.azure.example.com

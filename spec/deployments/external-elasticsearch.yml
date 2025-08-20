@@ -1,0 +1,16 @@
+---
+kit:
+  features:
+  - external-elasticsearch
+
+genesis:
+  env: external-elasticsearch
+
+params:
+  base_domain: logsearch.external.example.com
+  external_elasticsearch_hosts:
+  - es-cluster-1.example.com:9200
+  - es-cluster-2.example.com:9200
+  - es-cluster-3.example.com:9200
+  external_elasticsearch_username: elastic
+  external_elasticsearch_ssl_verify: true

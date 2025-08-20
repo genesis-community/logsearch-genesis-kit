@@ -1,0 +1,13 @@
+---
+kit:
+  features:
+  - enhanced-curator
+
+genesis:
+  env: enhanced-curator
+
+params:
+  base_domain: logsearch.curator.example.com
+  index_retention_days: 30
+  snapshot_retention_weeks: 12
+  curator_retention_days: 7

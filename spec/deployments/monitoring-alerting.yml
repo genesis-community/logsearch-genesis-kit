@@ -1,0 +1,16 @@
+---
+kit:
+  features:
+  - prometheus-monitoring
+  - alerting
+
+genesis:
+  env: monitoring-alerting
+
+params:
+  base_domain: logsearch.monitoring.example.com
+  alert_email: admin@example.com
+  prometheus_elasticsearch_exporter_port: 9114
+  prometheus_logstash_exporter_port: 9198
+  smtp_host: smtp.example.com
+  smtp_username: alerts@example.com

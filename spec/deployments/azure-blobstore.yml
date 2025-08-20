@@ -1,0 +1,12 @@
+---
+kit:
+  features:
+  - azure-blobstore
+
+genesis:
+  env: azure-blobstore
+
+params:
+  base_domain: logsearch.azure.example.com
+  azure_storage_account: testlogstorageacct
+  azure_container: elasticsearch-snapshots

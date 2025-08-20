@@ -1,0 +1,23 @@
+---
+kit:
+  features: []
+
+genesis:
+  env: base-all-params
+
+params:
+  base_domain: logsearch.test.example.com
+  elasticsearch_instances: 5
+  logstash_instances: 3
+  kibana_instances: 2
+  elasticsearch_heap_size: "4g"
+  logstash_heap_size: "2g"
+  elasticsearch_master_vm_type: large
+  elasticsearch_data_vm_type: large
+  logstash_vm_type: medium
+  kibana_vm_type: small
+  maintenance_vm_type: small
+  elasticsearch_master_disk_type: large
+  elasticsearch_data_disk_type: large
+  logsearch_network: logsearch
+  availability_zones: [z1, z2, z3]

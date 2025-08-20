@@ -1,0 +1,13 @@
+---
+kit:
+  features:
+  - prometheus-monitoring
+
+genesis:
+  env: prometheus-monitoring
+
+params:
+  base_domain: logsearch.monitoring.example.com
+  prometheus_elasticsearch_exporter_port: 9114
+  prometheus_logstash_exporter_port: 9198
+  prometheus_node_exporter_port: 9100

@@ -1,0 +1,10 @@
+---
+kit:
+  features:
+  - small-footprint
+
+genesis:
+  env: small-footprint
+
+params:
+  base_domain: logsearch.dev.example.com

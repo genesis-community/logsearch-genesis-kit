@@ -1,0 +1,9 @@
+---
+kit:
+  features: []
+
+genesis:
+  env: gcp
+
+params:
+  base_domain: logsearch.gcp.example.com

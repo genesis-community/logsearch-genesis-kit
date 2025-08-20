@@ -1,0 +1,74 @@
+azs:
+- name: z1
+  cloud_properties:
+    availability_zone: us-west-2a
+- name: z2
+  cloud_properties:
+    availability_zone: us-west-2b
+- name: z3
+  cloud_properties:
+    availability_zone: us-west-2c
+
+vm_types:
+- name: default
+  cloud_properties:
+    instance_type: m5.large
+    ephemeral_disk: {size: 25_000}
+- name: small
+  cloud_properties:
+    instance_type: t3.small
+    ephemeral_disk: {size: 10_000}
+- name: medium
+  cloud_properties:
+    instance_type: m5.large
+    ephemeral_disk: {size: 25_000}
+- name: large
+  cloud_properties:
+    instance_type: m5.xlarge
+    ephemeral_disk: {size: 50_000}
+
+disk_types:
+- name: default
+  disk_size: 20_000
+  cloud_properties:
+    type: gp3
+- name: small
+  disk_size: 10_000
+  cloud_properties:
+    type: gp3
+- name: large
+  disk_size: 100_000
+  cloud_properties:
+    type: gp3
+- name: elasticsearch-ssd
+  disk_size: 500_000
+  cloud_properties:
+    type: gp3
+    iops: 3000
+
+networks:
+- name: default
+  type: manual
+  subnets:
+  - range: 10.0.1.0/24
+    gateway: 10.0.1.1
+    azs: [z1]
+    static: [10.0.1.10-10.0.1.30]
+    cloud_properties:
+      subnet: subnet-12345
+- name: logsearch
+  type: manual
+  subnets:
+  - range: 10.0.2.0/24
+    gateway: 10.0.2.1
+    azs: [z1, z2, z3]
+    static: [10.0.2.10-10.0.2.50]
+    cloud_properties:
+      subnet: subnet-67890
+
+compilation:
+  workers: 3
+  reuse_compilation_vms: true
+  az: z1
+  vm_type: large
+  network: default

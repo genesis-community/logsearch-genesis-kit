@@ -1,0 +1,15 @@
+---
+kit:
+  features:
+  - cf-integration
+  - prometheus-monitoring
+  - custom-parsers
+
+genesis:
+  env: cf-monitoring
+
+params:
+  base_domain: logsearch.cf.example.com
+  cf_system_domain: system.cf.example.com
+  cf_app_retention_days: 14
+  cf_platform_retention_days: 60
