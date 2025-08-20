@@ -1,0 +1,100 @@
+---
+# Enhanced Curator configuration for OCFP Logsearch
+params:
+  # Curator schedule
+  curator_run_schedule: "0 2 * * *"  # Run at 2 AM daily
+  
+  # Index lifecycle policies
+  curator_close_indices_older_than: (( meta.ocfp.env.scale == "prod" ? 7 : 3 ))
+  curator_delete_indices_older_than: (( meta.ocfp.env.scale == "prod" ? 90 : 30 ))
+  curator_snapshot_indices_older_than: (( meta.ocfp.env.scale == "prod" ? 1 : 0 ))
+  
+  # Snapshot repository
+  curator_snapshot_repository: logsearch-snapshots
+  curator_snapshot_name_pattern: "snapshot-%Y%m%d%H%M%S"
+  
+  # Index patterns to manage
+  curator_index_patterns:
+    - pattern: "logstash-*"
+      close_after_days: (( grab params.curator_close_indices_older_than ))
+      delete_after_days: (( grab params.curator_delete_indices_older_than ))
+      snapshot_after_days: (( grab params.curator_snapshot_indices_older_than ))
+    - pattern: "cf-logs-*"
+      close_after_days: 7
+      delete_after_days: 30
+      snapshot_after_days: 1
+    - pattern: "bosh-tasks-*"
+      close_after_days: 3
+      delete_after_days: 7
+      snapshot_after_days: 0
+
+instance_groups:
+  - name: maintenance
+    instances: 1
+    azs: (( grab params.availability_zones ))
+    vm_type: (( grab params.maintenance_vm_type ))
+    stemcell: default
+    networks:
+      - name: (( grab params.logsearch_network ))
+    jobs:
+      - name: curator
+        release: logsearch
+        properties:
+          curator:
+            elasticsearch:
+              hosts:
+                - (( grab params.elasticsearch_ips.[0] ))
+              port: 9200
+            cron_schedule: (( grab params.curator_run_schedule ))
+            actions:
+              1:
+                action: close
+                description: "Close indices older than configured days"
+                options:
+                  ignore_empty_list: true
+                filters:
+                  - filtertype: pattern
+                    kind: prefix
+                    value: logstash-
+                  - filtertype: age
+                    source: creation_date
+                    direction: older
+                    timestring: "%Y.%m.%d"
+                    unit: days
+                    unit_count: (( grab params.curator_close_indices_older_than ))
+              2:
+                action: delete_indices
+                description: "Delete indices older than configured days"
+                options:
+                  ignore_empty_list: true
+                filters:
+                  - filtertype: pattern
+                    kind: prefix
+                    value: logstash-
+                  - filtertype: age
+                    source: creation_date
+                    direction: older
+                    timestring: "%Y.%m.%d"
+                    unit: days
+                    unit_count: (( grab params.curator_delete_indices_older_than ))
+              3:
+                action: snapshot
+                description: "Snapshot indices older than configured days"
+                options:
+                  repository: (( grab params.curator_snapshot_repository ))
+                  name: (( grab params.curator_snapshot_name_pattern ))
+                  ignore_unavailable: false
+                  include_global_state: false
+                  partial: false
+                  wait_for_completion: true
+                  skip_repo_fs_check: false
+                filters:
+                  - filtertype: pattern
+                    kind: prefix
+                    value: logstash-
+                  - filtertype: age
+                    source: creation_date
+                    direction: older
+                    timestring: "%Y.%m.%d"
+                    unit: days
+                    unit_count: (( grab params.curator_snapshot_indices_older_than ))

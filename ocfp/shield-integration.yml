@@ -1,0 +1,50 @@
+---
+# Shield backup integration for OCFP Logsearch
+params:
+  # Shield core endpoint from vault
+  shield_core_url: (( vault meta.ocfp.vault.config "/shield:core_url" ))
+  shield_tenant: logsearch
+  
+  # Backup schedule
+  shield_backup_schedule: "daily 2am"
+  shield_retention_policy: "30d"
+  
+  # S3 backup store configuration
+  shield_store_plugin: s3
+  shield_store_endpoint: (( vault meta.ocfp.vault.config "/shield:s3_endpoint" ))
+  shield_store_bucket: (( vault meta.ocfp.vault.config "/shield:s3_bucket" ))
+  shield_store_prefix: "logsearch/"
+
+instance_groups:
+  - name: elasticsearch
+    jobs:
+      - name: shield-agent
+        release: shield
+        properties:
+          shield:
+            agent:
+              autoprovision: true
+            core: (( grab params.shield_core_url ))
+            tenant: (( grab params.shield_tenant ))
+            provisioning_key: (( vault meta.ocfp.vault.config "/shield:provisioning_key" ))
+          targets:
+            - name: elasticsearch-data
+              plugin: elasticsearch
+              config:
+                elasticsearch_host: "127.0.0.1:9200"
+                indices: "_all"
+          stores:
+            - name: s3-backups
+              plugin: (( grab params.shield_store_plugin ))
+              config:
+                endpoint: (( grab params.shield_store_endpoint ))
+                bucket: (( grab params.shield_store_bucket ))
+                prefix: (( grab params.shield_store_prefix ))
+                access_key_id: (( vault meta.ocfp.vault.config "/shield:s3_access_key" ))
+                secret_access_key: (( vault meta.ocfp.vault.config "/shield:s3_secret_key" ))
+          retention:
+            name: default
+            expires: (( grab params.shield_retention_policy ))
+          schedule:
+            name: daily
+            when: (( grab params.shield_backup_schedule ))

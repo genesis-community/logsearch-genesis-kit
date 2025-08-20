@@ -1,0 +1,27 @@
+---
+# Trust Blacksmith CA certificate
+params:
+  blacksmith_ca_cert: (( vault meta.ocfp.vault.config "/ca-certs:blacksmith-ca" ))
+
+instance_groups:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        tls:
+          ca_certs:
+            - (( grab params.blacksmith_ca_cert ))
+            
+  - name: logstash
+    properties:
+      logstash:
+        tls:
+          ca_certs:
+            - (( grab params.blacksmith_ca_cert ))
+            
+  - name: kibana
+    properties:
+      kibana:
+        elasticsearch:
+          ssl:
+            certificateAuthorities:
+              - (( grab params.blacksmith_ca_cert ))

@@ -1,0 +1,43 @@
+---
+# BOSH integration for OCFP Logsearch
+params:
+  # BOSH director settings from vault
+  bosh_director_url: (( vault meta.ocfp.vault.config "/bosh:director_url" ))
+  bosh_director_ca_cert: (( vault meta.ocfp.vault.config "/bosh:ca_cert" ))
+  
+  # BOSH UAA settings
+  bosh_uaa_url: (( vault meta.ocfp.vault.config "/bosh:uaa_url" ))
+  bosh_uaa_client_id: logsearch
+  bosh_uaa_client_secret: (( vault meta.ocfp.vault.config "/bosh:logsearch_client_secret" ))
+  
+  # Log retention for BOSH logs
+  bosh_log_retention_days: 30
+  bosh_task_log_retention_days: 7
+
+instance_groups:
+  - name: logstash
+    jobs:
+      - name: bosh-tasks-sink
+        release: logsearch-boshrelease
+        properties:
+          bosh:
+            director_url: (( grab params.bosh_director_url ))
+            ca_cert: (( grab params.bosh_director_ca_cert ))
+            uaa:
+              url: (( grab params.bosh_uaa_url ))
+              client_id: (( grab params.bosh_uaa_client_id ))
+              client_secret: (( grab params.bosh_uaa_client_secret ))
+          logstash:
+            host: 127.0.0.1
+            port: 5514
+            
+      - name: bosh-logs-sink
+        release: logsearch-boshrelease
+        properties:
+          syslog:
+            port: 5515
+          filters:
+            - deployment: "^cf-.*"
+              retention_days: (( grab params.bosh_log_retention_days ))
+            - deployment: ".*"
+              retention_days: (( grab params.bosh_task_log_retention_days ))

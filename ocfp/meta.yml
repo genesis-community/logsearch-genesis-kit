@@ -1,0 +1,43 @@
+---
+meta:
+  ocfp:
+    env:
+      scale: (( grab params.ocfp_env_scale || "dev" ))
+      cloud: (( concat params.ocfp_env_scale "-" ))
+    vault:
+      config_slug:   (( grab params.ocfp_vault_config_slug || genesis.ocfp_env ))
+      config:        (( concat genesis.ocfp_config_mount meta.ocfp.vault.config_slug ))
+
+params:
+  # OCFP manages its own networks and instance configurations
+  logsearch_network: (( concat meta.ocfp.env.cloud "net-logsearch" ))
+  
+  # FQDNs from Vault
+  elasticsearch_fqdn: (( vault meta.ocfp.vault.config "/fqdns:elasticsearch" ))
+  kibana_fqdn:        (( vault meta.ocfp.vault.config "/fqdns:kibana" ))
+  logstash_fqdn:      (( vault meta.ocfp.vault.config "/fqdns:logstash" ))
+  
+  # Instance types
+  elasticsearch_master_vm_type: (( concat meta.ocfp.env.cloud "vm-elasticsearch-master" ))
+  elasticsearch_data_vm_type:   (( concat meta.ocfp.env.cloud "vm-elasticsearch-data" ))
+  logstash_vm_type:            (( concat meta.ocfp.env.cloud "vm-logstash" ))
+  kibana_vm_type:              (( concat meta.ocfp.env.cloud "vm-kibana" ))
+  maintenance_vm_type:         (( concat meta.ocfp.env.cloud "vm-maintenance" ))
+  
+  # Disk types
+  elasticsearch_master_disk_type: (( concat meta.ocfp.env.cloud "disk-elasticsearch-master" ))
+  elasticsearch_data_disk_type:   (( concat meta.ocfp.env.cloud "disk-elasticsearch-data" ))
+  
+  # Static IPs from Vault
+  elasticsearch_ips: (( vault meta.ocfp.vault.config "/net/subnets/ocfp-0/reserved-ips:elasticsearch_ips" ))
+  kibana_ip:         (( vault meta.ocfp.vault.config "/net/subnets/ocfp-0/reserved-ips:kibana_ip" ))
+  logstash_ips:      (( vault meta.ocfp.vault.config "/net/subnets/ocfp-0/reserved-ips:logstash_ips" ))
+
+  # Scale-based instance counts
+  elasticsearch_instances: (( meta.ocfp.env.scale == "prod" ? 5 : 3 ))
+  logstash_instances:      (( meta.ocfp.env.scale == "prod" ? 3 : 2 ))
+  kibana_instances:        (( meta.ocfp.env.scale == "prod" ? 2 : 1 ))
+  
+  # Scale-based heap sizes
+  elasticsearch_heap_size: (( meta.ocfp.env.scale == "prod" ? "4g" : "2g" ))
+  logstash_heap_size:      (( meta.ocfp.env.scale == "prod" ? "2g" : "1g" ))

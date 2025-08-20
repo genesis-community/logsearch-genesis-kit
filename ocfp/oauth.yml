@@ -1,0 +1,48 @@
+---
+# OAuth authentication for OCFP Logsearch
+params:
+  # OAuth provider configuration from vault
+  oauth_provider: (( vault meta.ocfp.vault.config "/oauth:provider" || "cf-uaa" ))
+  oauth_discovery_url: (( vault meta.ocfp.vault.config "/oauth:discovery_url" ))
+  oauth_client_id: (( vault meta.ocfp.vault.config "/oauth:client_id" || "logsearch" ))
+  oauth_client_secret: (( vault meta.ocfp.vault.config "/oauth:client_secret" ))
+  oauth_redirect_uri: (( concat "https://" params.kibana_fqdn "/auth/callback" ))
+  
+  # OAuth scopes
+  oauth_scopes:
+    - openid
+    - profile
+    - email
+    - logsearch.read
+    - logsearch.write
+  
+  # Role mappings
+  oauth_admin_group: logsearch.admin
+  oauth_readonly_group: logsearch.readonly
+
+instance_groups:
+  - name: kibana
+    jobs:
+      - name: oauth2-proxy
+        release: oauth2-proxy
+        properties:
+          oauth2_proxy:
+            provider: (( grab params.oauth_provider ))
+            client_id: (( grab params.oauth_client_id ))
+            client_secret: (( grab params.oauth_client_secret ))
+            cookie_secret: (( vault meta.vault "/oauth:cookie_secret" ))
+            redirect_url: (( grab params.oauth_redirect_uri ))
+            oidc_issuer_url: (( grab params.oauth_discovery_url ))
+            email_domains:
+              - "*"
+            upstreams:
+              - "http://127.0.0.1:5601"
+            skip_auth_regex:
+              - "^/api"
+              - "^/bundles"
+              - "^/plugins"
+              - "^/ui"
+            pass_access_token: true
+            pass_authorization_header: true
+            set_authorization_header: true
+            scope: (( join " " params.oauth_scopes ))

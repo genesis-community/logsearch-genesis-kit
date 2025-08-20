@@ -1,0 +1,79 @@
+---
+# Example: Azure-optimized Logsearch deployment
+# This example shows configuration optimized for Microsoft Azure
+
+kit:
+  name: logsearch
+  version: 1.0.0
+  features:
+    - azure-storage
+    - monitoring
+
+genesis:
+  env: azure-prod
+  iaas: azure
+
+params:
+  # Azure domain configuration
+  base_domain: logs.azure.company.com
+  
+  # Azure availability zones
+  availability_zones:
+    - z1
+    - z2
+    - z3
+  
+  # Azure-optimized scaling
+  elasticsearch_instances: 3
+  logstash_instances: 2
+  kibana_instances: 2
+  
+  # Azure instance sizing (D-series VMs)
+  elasticsearch_vm_type: Standard_D4s_v3   # 4 vCPU, 16GB RAM
+  logstash_vm_type: Standard_D2s_v3        # 2 vCPU, 8GB RAM
+  kibana_vm_type: Standard_D2s_v3          # 2 vCPU, 8GB RAM
+  
+  # Memory allocation for Azure instance types
+  elasticsearch_heap_size: 8g   # Leave 8GB for OS and file cache
+  logstash_heap_size: 4g        # Leave 4GB for OS
+  kibana_memory_limit: 4g       # Leave 4GB for OS
+  
+  # Azure Blob Storage configuration
+  azure_storage_account: companyazurelogs
+  azure_container: logsearch-snapshots
+  azure_storage_tier: Cool  # Cost-effective for backups
+  
+  # Azure-optimized disk configuration
+  elasticsearch_disk_type: Premium_LRS    # Premium SSD
+  elasticsearch_disk_size: 500_000        # 500GB
+  
+  # Performance tuning for Azure
+  elasticsearch_thread_pool_size: 8       # Match vCPU count / 2
+  logstash_pipeline_workers: 4            # Match vCPU count
+  logstash_pipeline_batch_size: 250
+  
+  # Azure monitoring
+  prometheus_elasticsearch_exporter_port: 9114
+  prometheus_logstash_exporter_port: 9198
+  
+  # Azure Monitor integration (optional)
+  azure_monitor_enabled: true
+  azure_log_analytics_workspace: company-log-analytics
+
+# Required Azure permissions:
+# - Storage Blob Data Contributor role on storage account
+# - Storage Account Contributor role for container management
+
+# Azure CLI setup:
+# az login
+# az account set --subscription "Company Subscription"
+# az storage account keys list --account-name companyazurelogs
+
+# Vault secrets for Azure:
+# safe set secret/logsearch/azure-prod/azure:storage_key "storage_account_key"
+
+# Azure-specific deployment commands:
+# az login
+# genesis new azure-prod
+# genesis deploy azure-prod
+# genesis do azure-prod -- es-health

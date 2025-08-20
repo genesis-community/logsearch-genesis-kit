@@ -148,16 +148,30 @@ params:
 
 ## Features
 
+### Core Features
+
+#### Small Footprint
+
+Minimal resource deployment for development:
+
+```yaml
+kit:
+  features:
+    - small-footprint
+```
+
+This reduces resource requirements and deploys single instances.
+
 ### Cloud Storage Features
 
-#### S3 Blobstore
+#### S3 Storage
 
 Configure AWS S3 for Elasticsearch snapshots:
 
 ```yaml
 kit:
   features:
-    - s3-blobstore
+    - s3-storage
 
 params:
   s3_bucket: my-logsearch-snapshots
@@ -166,29 +180,29 @@ params:
   s3_secret_access_key: ((vault_path))/aws:secret_access_key)
 ```
 
-#### Azure Blobstore
+#### Azure Storage
 
 Configure Azure Blob Storage:
 
 ```yaml
 kit:
   features:
-    - azure-blobstore
+    - azure-storage
 
 params:
   azure_storage_account: mylogstorageacct
   azure_container: logsearch-snapshots
-  azure_access_key: ((vault_path))/azure:access_key)
+  azure_storage_key: ((vault_path))/azure:storage_key)
 ```
 
-#### GCS Blobstore
+#### GCS Storage
 
 Configure Google Cloud Storage:
 
 ```yaml
 kit:
   features:
-    - gcs-blobstore
+    - gcs-storage
 
 params:
   gcs_bucket: my-logsearch-snapshots
@@ -197,23 +211,50 @@ params:
 
 ### Monitoring Features
 
-#### Prometheus Monitoring
+#### Monitoring
 
-Enable Prometheus exporters:
+Enable comprehensive monitoring with Prometheus exporters:
 
 ```yaml
 kit:
   features:
-    - prometheus-monitoring
+    - monitoring
 
 params:
   prometheus_elasticsearch_exporter_port: 9114
   prometheus_logstash_exporter_port: 9198
 ```
 
+### Advanced Features
+
+#### OAuth Authentication
+
+Configure OAuth/OIDC for Kibana with multi-provider support:
+
+```yaml
+kit:
+  features:
+    - oauth-authentication
+
+params:
+  oauth_provider: github  # github, google, azure, okta, custom
+  oauth_discovery_url: https://github.com
+  oauth_authorized_domains:
+    - example.com
+  oauth_admin_groups:
+    - logsearch-admins
+```
+
+**Supported OAuth Providers:**
+- **GitHub**: Enterprise SSO with organization-based access
+- **Google**: G Suite/Google Workspace integration
+- **Azure AD**: Microsoft enterprise authentication
+- **Okta**: Enterprise identity management
+- **Custom**: Generic OIDC provider support
+
 #### Shield Integration
 
-Enable backup/restore via Shield:
+Enable automated backup/restore via Shield:
 
 ```yaml
 kit:
@@ -222,25 +263,92 @@ kit:
 
 params:
   shield_endpoint: https://shield.example.com
-  shield_agent_key: ((vault_path))/shield:agent_key)
+  shield_retention_policy: weekly
+  shield_backup_schedule: "daily 2am"
 ```
 
-### Authentication Features
+**Shield Integration Features:**
+- Automated daily backups with configurable scheduling
+- Retention policy management (daily, weekly, monthly)
+- Point-in-time recovery capabilities
+- Cross-region backup replication
 
-#### OAuth Authentication
+#### BOSH Integration
 
-Configure OAuth/OIDC for Kibana:
+Parse and analyze BOSH director logs with specialized filters:
 
 ```yaml
 kit:
   features:
-    - oauth-authentication
+    - bosh-integration
 
 params:
-  oauth_provider: https://auth.example.com
-  oauth_client_id: kibana-client
-  oauth_client_secret: ((vault_path))/oauth:client_secret)
+  bosh_director_url: https://bosh.example.com:25555
+  bosh_log_retention_days: 60
+  bosh_metrics_enabled: true
 ```
+
+**BOSH Integration Features:**
+- PostgreSQL query log parsing and performance analysis
+- NATS messaging system log analysis
+- Director task and deployment tracking
+- VM and job health monitoring
+
+#### Multi-Region Support
+
+Deploy distributed clusters across multiple regions:
+
+```yaml
+kit:
+  features:
+    - multi-region
+
+params:
+  primary_region: us-west-2
+  regions:
+    - us-west-2
+    - us-east-1
+  availability_zones:
+    - us-west-2a
+    - us-west-2b
+    - us-west-2c
+    - us-east-1a
+    - us-east-1b
+  cross_region_replication: true
+  minimum_master_nodes: 3
+```
+
+**Multi-Region Features:**
+- Cross-region data replication for disaster recovery
+- Zone-aware shard allocation for high availability
+- Global load balancing across regions
+- Automatic failover and recovery
+
+#### Performance Optimization
+
+Enterprise-grade performance tuning for high-throughput environments:
+
+```yaml
+kit:
+  features:
+    - performance-optimization
+
+params:
+  elasticsearch_heap_size: 16g
+  logstash_heap_size: 8g
+  kibana_memory_limit: 4g
+  elasticsearch_thread_pool_size: 32
+  elasticsearch_bulk_queue_size: 500
+  logstash_pipeline_workers: 16
+  logstash_pipeline_batch_size: 250
+```
+
+**Performance Features:**
+- JVM tuning with G1GC optimization
+- Thread pool configuration for high concurrency
+- Bulk processing optimization
+- Memory management and caching strategies
+- I/O optimization for storage operations
 
 ### Log Source Integration
 
@@ -255,53 +363,58 @@ kit:
 
 params:
   cf_system_domain: system.cf.example.com
+  cf_apps_domain: apps.cf.example.com
+  doppler_shared_secret: ((vault_path))/cf:doppler_secret)
 ```
 
-#### BOSH Integration  
+### Addon Features
 
-Parse BOSH director logs:
+#### Custom Parsers
+
+Deploy custom log parsing configurations:
 
 ```yaml
 kit:
   features:
-    - bosh-integration
+    - custom-parsers
 
 params:
-  bosh_director_url: https://bosh.example.com
+  custom_logstash_config: |
+    filter {
+      if [program] == "myapp" {
+        grok {
+          match => { "message" => "%{TIMESTAMP_ISO8601:timestamp} \[%{LOGLEVEL:level}\] %{GREEDYDATA:msg}" }
+        }
+      }
+    }
 ```
 
-### Deployment Sizing
+#### Curator
 
-#### Small Footprint
-
-Minimal resource deployment for development:
+Automated index lifecycle management:
 
 ```yaml
 kit:
   features:
-    - small-footprint
-```
-
-This reduces resource requirements and deploys single instances.
-
-### External Services
-
-#### External Elasticsearch
-
-Use an external Elasticsearch cluster:
-
-```yaml
-kit:
-  features:
-    - external-elasticsearch
+    - curator
 
 params:
-  external_elasticsearch_hosts:
-    - es-node1.example.com:9200
-    - es-node2.example.com:9200
-    - es-node3.example.com:9200
-  external_elasticsearch_username: elastic
-  external_elasticsearch_password: ((vault_path))/external-es:password)
+  curator_schedule: "0 1 * * *"  # Daily at 1 AM
+  curator_retention_days: 30
+```
+
+#### Alerting
+
+Elasticsearch-based alerting system:
+
+```yaml
+kit:
+  features:
+    - alerting
+
+params:
+  alerting_email_server: smtp.example.com
+  alerting_email_from: alerts@example.com
 ```
 
 ## Deployment Scenarios

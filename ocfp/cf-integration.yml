@@ -1,0 +1,46 @@
+---
+# Cloud Foundry integration for OCFP Logsearch
+params:
+  # CF API endpoint from vault
+  cf_api_url: (( vault meta.ocfp.vault.config "/cf:api_url" ))
+  cf_system_domain: (( vault meta.ocfp.vault.config "/cf:system_domain" ))
+  
+  # CF UAA settings
+  cf_uaa_url: (( vault meta.ocfp.vault.config "/cf:uaa_url" ))
+  cf_uaa_client_id: logsearch
+  cf_uaa_client_secret: (( vault meta.ocfp.vault.config "/cf:logsearch_client_secret" ))
+  
+  # Doppler settings
+  cf_doppler_url: (( vault meta.ocfp.vault.config "/cf:doppler_url" ))
+  cf_doppler_subscription_id: logsearch
+  
+  # Syslog drain port
+  syslog_drain_port: 514
+
+instance_groups:
+  - name: logstash
+    jobs:
+      - name: cf-syslog-drain
+        release: logsearch-for-cloudfoundry
+        properties:
+          syslog:
+            port: (( grab params.syslog_drain_port ))
+          
+      - name: firehose-to-syslog
+        release: logsearch-for-cloudfoundry
+        properties:
+          cloudfoundry:
+            api_endpoint: (( grab params.cf_api_url ))
+            doppler_endpoint: (( grab params.cf_doppler_url ))
+            skip_ssl_validation: (( grab params.skip_ssl_validation ))
+          firehose:
+            uaa:
+              url: (( grab params.cf_uaa_url ))
+              client_id: (( grab params.cf_uaa_client_id ))
+              client_secret: (( grab params.cf_uaa_client_secret ))
+            subscription_id: (( grab params.cf_doppler_subscription_id ))
+            keep_alive: 60s
+            idle_timeout: 60s
+          syslog:
+            host: 127.0.0.1
+            port: (( grab params.syslog_drain_port ))

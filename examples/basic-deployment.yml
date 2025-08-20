@@ -1,0 +1,34 @@
+---
+# Example: Basic Logsearch deployment for development/testing
+# This example shows the minimal configuration required to deploy Logsearch
+
+kit:
+  name: logsearch
+  version: 1.0.0
+  features:
+    - small-footprint
+
+genesis:
+  env: basic
+
+params:
+  # Required: Base domain for all components
+  base_domain: logs.dev.example.com
+  
+  # Optional: Override default resource allocation
+  elasticsearch_instances: 1
+  logstash_instances: 1
+  kibana_instances: 1
+  
+  # Optional: Adjust memory allocation for development
+  elasticsearch_heap_size: 2g
+  logstash_heap_size: 1g
+  kibana_memory_limit: 512m
+  
+  # Optional: Timezone configuration
+  timezone: America/New_York
+
+# Deployment commands:
+# genesis new basic
+# genesis deploy basic
+# genesis do basic -- visit-kibana

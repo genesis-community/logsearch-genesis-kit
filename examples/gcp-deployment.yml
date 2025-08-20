@@ -1,0 +1,93 @@
+---
+# Example: Google Cloud Platform optimized Logsearch deployment
+# This example shows configuration optimized for Google Cloud Platform
+
+kit:
+  name: logsearch
+  version: 1.0.0
+  features:
+    - gcs-storage
+    - monitoring
+
+genesis:
+  env: gcp-prod
+  iaas: gcp
+
+params:
+  # GCP domain configuration
+  base_domain: logs.gcp.company.com
+  
+  # GCP zones
+  availability_zones:
+    - us-west1-a
+    - us-west1-b
+    - us-west1-c
+  
+  # GCP-optimized scaling
+  elasticsearch_instances: 3
+  logstash_instances: 2
+  kibana_instances: 2
+  
+  # GCP instance sizing (n1-standard series)
+  elasticsearch_vm_type: n1-standard-4     # 4 vCPU, 15GB RAM
+  logstash_vm_type: n1-standard-2          # 2 vCPU, 7.5GB RAM
+  kibana_vm_type: n1-standard-1            # 1 vCPU, 3.75GB RAM
+  
+  # Memory allocation for GCP instance types
+  elasticsearch_heap_size: 8g   # Leave ~7GB for OS and file cache
+  logstash_heap_size: 3g        # Leave ~4.5GB for OS
+  kibana_memory_limit: 2g       # Leave ~1.75GB for OS
+  
+  # Google Cloud Storage configuration
+  gcs_bucket: company-gcp-logsearch
+  gcs_region: us-west1
+  gcs_storage_class: NEARLINE  # Cost-effective for backups
+  
+  # GCP-optimized disk configuration
+  elasticsearch_disk_type: pd-ssd         # SSD persistent disk
+  elasticsearch_disk_size: 500_000        # 500GB
+  
+  # Performance tuning for GCP
+  elasticsearch_thread_pool_size: 8       # Match vCPU count / 2
+  logstash_pipeline_workers: 4            # Match vCPU count
+  logstash_pipeline_batch_size: 250
+  
+  # GCP monitoring
+  prometheus_elasticsearch_exporter_port: 9114
+  prometheus_logstash_exporter_port: 9198
+  
+  # Google Cloud Logging integration (optional)
+  stackdriver_enabled: true
+  stackdriver_project_id: company-project-id
+
+# Required GCP IAM roles:
+# - Storage Object Admin role on the GCS bucket
+# - Storage Admin role for bucket management
+# - Monitoring Metric Writer role for Stackdriver
+
+# Service Account JSON should include:
+# {
+#   "type": "service_account",
+#   "project_id": "company-project-id",
+#   "private_key_id": "...",
+#   "private_key": "-----BEGIN PRIVATE KEY-----\n...",
+#   "client_email": "logsearch@company-project-id.iam.gserviceaccount.com",
+#   "client_id": "...",
+#   "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+#   "token_uri": "https://oauth2.googleapis.com/token"
+# }
+
+# GCP CLI setup:
+# gcloud auth login
+# gcloud config set project company-project-id
+# gcloud iam service-accounts create logsearch
+# gcloud iam service-accounts keys create service-account.json --iam-account=logsearch@company-project-id.iam.gserviceaccount.com
+
+# Vault secrets for GCP:
+# safe set secret/logsearch/gcp-prod/gcp:service_account_json @service-account.json
+
+# GCP-specific deployment commands:
+# gcloud auth login
+# genesis new gcp-prod
+# genesis deploy gcp-prod
+# genesis do gcp-prod -- es-health

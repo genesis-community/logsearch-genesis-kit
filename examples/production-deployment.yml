@@ -1,0 +1,65 @@
+---
+# Example: Production Logsearch deployment with monitoring and S3 storage
+# This example demonstrates a production-ready configuration
+
+kit:
+  name: logsearch
+  version: 1.0.0
+  features:
+    - s3-storage
+    - monitoring
+    - oauth-authentication
+
+genesis:
+  env: production
+
+params:
+  # Production domain configuration
+  base_domain: logs.company.com
+  
+  # Production scaling
+  elasticsearch_instances: 3
+  logstash_instances: 2
+  kibana_instances: 2
+  
+  # Production memory allocation
+  elasticsearch_heap_size: 16g
+  logstash_heap_size: 4g
+  kibana_memory_limit: 2g
+  
+  # S3 storage backend configuration
+  s3_bucket: company-logsearch-snapshots
+  s3_region: us-west-2
+  # Credentials stored in Vault:
+  # safe set secret/logsearch/production/s3:access_key_id "AKIA..."
+  # safe set secret/logsearch/production/s3:secret_access_key "..."
+  
+  # OAuth authentication with GitHub
+  oauth_provider: github
+  oauth_discovery_url: https://github.com
+  oauth_authorized_domains:
+    - company.com
+  oauth_admin_groups:
+    - platform-team
+    - security-team
+  # OAuth credentials stored in Vault:
+  # safe set secret/logsearch/production/oauth:client_id "github_client_id"
+  # safe set secret/logsearch/production/oauth:client_secret "github_client_secret"
+  
+  # Monitoring configuration
+  prometheus_elasticsearch_exporter_port: 9114
+  prometheus_logstash_exporter_port: 9198
+  
+  # Production timezone
+  timezone: UTC
+  
+  # Performance tuning
+  elasticsearch_disk_size: 500_000  # 500GB per node
+  logstash_pipeline_workers: 8
+  logstash_pipeline_batch_size: 250
+
+# Deployment commands:
+# genesis new production
+# genesis deploy production
+# genesis do production -- es-health
+# genesis do production -- visit-kibana

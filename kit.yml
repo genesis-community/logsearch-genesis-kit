@@ -51,20 +51,28 @@ credentials:
   base:
     elasticsearch/admin_username:
       description: Admin username for Elasticsearch
+      type: username
     elasticsearch/admin_password:
       description: Admin password for Elasticsearch
+      type: password
     elasticsearch/cluster_bootstrap_password:
       description: Bootstrap password for Elasticsearch cluster setup
+      type: password
     kibana/system_username:
       description: System username for Kibana service
+      type: username
     kibana/system_password:
       description: System password for Kibana service
+      type: password
     logstash/system_username:
       description: System username for Logstash service
+      type: username
     logstash/system_password:
       description: System password for Logstash service
+      type: password
     logsearch/cluster_auth_token:
       description: Internal cluster authentication token
+      type: password
 
 params:
   base:

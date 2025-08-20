@@ -26,6 +26,12 @@ sub perform {
   my ($self) = @_;
   return 1 if $self->completed;
 
+  # Check for OCFP feature first
+  if ($self->want_feature("ocfp")) {
+    $self->validate_ocfp_features();
+    return $self->process_ocfp_features();
+  }
+
   # Always include base manifest
   $self->add_files('manifests/base.yml');
 
@@ -93,6 +99,9 @@ sub perform {
     } elsif ($feature eq 'performance-optimization') {
       $self->add_files('manifests/features/performance-optimization.yml');
       $self->validate_performance_params();
+      
+    } elsif ($feature =~ /^(ocfp|partitioned-network|\+external-elasticsearch|\+s3-blobstore)$/) {
+      # These features are handled by features.pm or process_ocfp_features
       
     } else {
       push @invalid_features, $feature;
@@ -339,6 +348,166 @@ sub validate_performance_params {
   }
   
   info("Performance optimization feature enabled");
+}
+# }}}
+
+# process_ocfp_features - Process OCFP-specific features and configuration {{{
+sub process_ocfp_features {
+  my ($self) = @_;
+  
+  # Get IaaS type
+  my $iaas = $self->env->cpi || 'aws';
+  $iaas = 'openstack' if $iaas eq 'stackit';
+  
+  # Base OCFP files
+  $self->add_files(
+    'ocfp/meta.yml',
+    'ocfp/ocfp.yml'
+  );
+  
+  # IaaS-specific files
+  $self->add_files_if_exists(
+    "ocfp/${iaas}/ocf.yml",
+    "ocfp/${iaas}/azs.yml"
+  );
+  
+  # Storage backend
+  if ($self->want_feature('s3-blobstore') || $self->want_feature('+s3-blobstore')) {
+    $self->add_files('ocfp/s3-blobstore.yml');
+    $self->add_files_if_exists("ocfp/${iaas}/s3-blobstore.yml");
+  } elsif ($self->want_feature('azure-blobstore')) {
+    $self->add_files('ocfp/azure-blobstore.yml');
+  } elsif ($self->want_feature('gcs-blobstore')) {
+    $self->add_files('ocfp/gcs-blobstore.yml');
+  } else {
+    # Default to internal storage
+    $self->add_files('ocfp/internal-storage.yml');
+  }
+  
+  # External Elasticsearch if requested
+  if ($self->want_feature('external-elasticsearch') || $self->want_feature('+external-elasticsearch')) {
+    $self->add_files(
+      'ocfp/external-elasticsearch.yml',
+      "ocfp/${iaas}/external-elasticsearch.yml"
+    );
+  } else {
+    # Internal Elasticsearch cluster
+    $self->add_files('ocfp/internal-elasticsearch.yml');
+  }
+  
+  # Process common OCFP features
+  my %feature_map = (
+    'prometheus-monitoring' => 'ocfp/prometheus-integration.yml',
+    'cf-integration'        => 'ocfp/cf-integration.yml',
+    'shield-integration'    => 'ocfp/shield-integration.yml',
+    'bosh-integration'      => 'ocfp/bosh-integration.yml',
+    'oauth-authentication'  => 'ocfp/oauth.yml',
+    'alerting'             => 'ocfp/alerting.yml',
+    'enhanced-curator'      => 'ocfp/curator.yml',
+    'partitioned-network'   => 'ocfp/partitioned-network.yml'
+  );
+  
+  foreach my $feature ($self->features) {
+    if (exists $feature_map{$feature}) {
+      $self->add_files($feature_map{$feature});
+    }
+  }
+  
+  # Trust certificates
+  $self->add_files("ocfp/trust-org-ca.yml");
+  $self->add_files("ocfp/trust-blacksmith-ca.yml") if $self->want_feature('blacksmith-integration');
+  $self->add_files("ocfp/trusted-certs.yml");
+  
+  # Validate OCFP parameters
+  $self->validate_ocfp_params();
+  
+  return $self->done(1);
+}
+# }}}
+
+# validate_ocfp_features - Validate OCFP feature combinations {{{
+sub validate_ocfp_features {
+  my ($self) = @_;
+  
+  my @allowed_features = (
+    'ocfp', # OCFP is the only feature that is always enabled in OCFP environments
+    'external-elasticsearch',
+    's3-blobstore',
+    'azure-blobstore', 
+    'gcs-blobstore',
+    'partitioned-network',
+    'small-footprint'
+  );
+  
+  my @implicit_features = (
+    'prometheus-monitoring',
+    'cf-integration',
+    'shield-integration',
+    'bosh-integration',
+    'oauth-authentication',
+    'alerting',
+    'enhanced-curator'
+  );
+  
+  # Check for conflicting features
+  my @explicit_features = $self->features;
+  my @invalid = ();
+  
+  for my $feature (@explicit_features) {
+    next if grep { $_ eq $feature } @allowed_features;
+    if (grep { $_ eq $feature } @implicit_features) {
+      warning("Feature '%s' is implicitly enabled by 'ocfp' and doesn't need to be specified", $feature);
+    } else {
+      push @invalid, $feature;
+    }
+  }
+  
+  if (@invalid) {
+    bail("Invalid features for OCFP deployment: %s", join(', ', @invalid));
+  }
+  
+  # Check for conflicting storage features
+  my @storage_features = grep { 
+    $_ =~ /^(s3-blobstore|azure-blobstore|gcs-blobstore)$/ 
+  } @explicit_features;
+  
+  if (scalar(@storage_features) > 1) {
+    bail("Only one storage backend feature can be enabled in OCFP. Found: %s", 
+      join(', ', @storage_features));
+  }
+}
+# }}}
+
+# validate_ocfp_params - Validate OCFP-specific parameters {{{
+sub validate_ocfp_params {
+  my ($self) = @_;
+  
+  # Check required OCFP parameters
+  my $ocfp_env_scale = $self->env->lookup('params.ocfp_env_scale', 'dev');
+  unless ($ocfp_env_scale =~ /^(dev|prod)$/) {
+    bail("Invalid ocfp_env_scale: '%s' (must be 'dev' or 'prod')", $ocfp_env_scale);
+  }
+  
+  # Vault configuration slug
+  my $vault_slug = $self->env->lookup('params.ocfp_vault_config_slug', '');
+  if ($vault_slug && $vault_slug !~ /^[a-zA-Z0-9\-_]+$/) {
+    bail("Invalid ocfp_vault_config_slug format: '%s'", $vault_slug);
+  }
+  
+  info("OCFP deployment configured with scale: %s", $ocfp_env_scale);
+}
+# }}}
+
+# add_files_if_exists - Add files only if they exist {{{
+sub add_files_if_exists {
+  my ($self, @files) = @_;
+  
+  foreach my $file (@files) {
+    my $full_path = $self->kit_path($file);
+    if (-f $full_path) {
+      $self->add_files($file);
+    }
+  }
 }
 # }}}
 

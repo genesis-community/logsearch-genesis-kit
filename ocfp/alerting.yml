@@ -1,0 +1,74 @@
+---
+# Alerting configuration for OCFP Logsearch
+params:
+  # Alert destinations from vault
+  alert_email_to: (( vault meta.ocfp.vault.config "/alerts:email_to" ))
+  alert_email_from: (( vault meta.ocfp.vault.config "/alerts:email_from" || "logsearch@ocfp.local" ))
+  alert_smtp_host: (( vault meta.ocfp.vault.config "/alerts:smtp_host" ))
+  alert_smtp_port: (( vault meta.ocfp.vault.config "/alerts:smtp_port" || 587 ))
+  alert_smtp_username: (( vault meta.ocfp.vault.config "/alerts:smtp_username" ))
+  alert_smtp_password: (( vault meta.ocfp.vault.config "/alerts:smtp_password" ))
+  
+  # Slack integration
+  alert_slack_webhook: (( vault meta.ocfp.vault.config "/alerts:slack_webhook" || "" ))
+  alert_slack_channel: (( vault meta.ocfp.vault.config "/alerts:slack_channel" || "#alerts" ))
+  
+  # Alert thresholds
+  alert_elasticsearch_heap_threshold: 85
+  alert_elasticsearch_disk_threshold: 80
+  alert_logstash_queue_threshold: 1000
+  alert_cluster_health_yellow_minutes: 5
+  alert_cluster_health_red_minutes: 1
+
+instance_groups:
+  - name: elasticsearch
+    jobs:
+      - name: elastalert
+        release: elastalert
+        properties:
+          elastalert:
+            elasticsearch:
+              host: 127.0.0.1
+              port: 9200
+            run_every:
+              minutes: 1
+            buffer_time:
+              minutes: 5
+            rules:
+              - name: elasticsearch-heap-usage
+                type: threshold
+                index: ".monitoring-es-*"
+                num_events: 1
+                timeframe:
+                  minutes: 5
+                filter:
+                  - range:
+                      jvm.mem.heap_used_percent:
+                        gt: (( grab params.alert_elasticsearch_heap_threshold ))
+                alert:
+                  - email
+                email:
+                  - (( grab params.alert_email_to ))
+                smtp_host: (( grab params.alert_smtp_host ))
+                smtp_port: (( grab params.alert_smtp_port ))
+                smtp_auth_file: "/var/vcap/jobs/elastalert/config/smtp_auth.yaml"
+                from_addr: (( grab params.alert_email_from ))
+                
+              - name: cluster-health
+                type: frequency
+                index: ".monitoring-es-*"
+                num_events: 1
+                timeframe:
+                  minutes: (( grab params.alert_cluster_health_red_minutes ))
+                filter:
+                  - terms:
+                      cluster_health.status:
+                        - red
+                alert:
+                  - email
+                  - slack
+                email:
+                  - (( grab params.alert_email_to ))
+                slack:
+                  slack_webhook_url: (( grab params.alert_slack_webhook ))
+                  slack_channel_override: (( grab params.alert_slack_channel ))

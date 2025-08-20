@@ -1,0 +1,24 @@
+---
+# OpenStack/Stackit-specific OCFP configuration
+params:
+  # Static IPs are managed through meta.yml
+  # Security groups are applied at the network level
+  
+instance_groups:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        network:
+          host: "_eth0_"  # Use first network interface
+          
+  - name: logstash
+    properties:
+      logstash:
+        network:
+          host: "_eth0_"
+          
+  - name: kibana
+    properties:
+      kibana:
+        server:
+          host: "0.0.0.0"  # Bind to all interfaces for load balancer access

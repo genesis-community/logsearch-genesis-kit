@@ -1,0 +1,117 @@
+---
+# Example: Enterprise Logsearch deployment with all advanced features
+# This example demonstrates a full-featured enterprise configuration
+
+kit:
+  name: logsearch
+  version: 1.0.0
+  features:
+    - multi-region
+    - performance-optimization
+    - shield-integration
+    - oauth-authentication
+    - monitoring
+    - s3-storage
+    - cf-integration
+
+genesis:
+  env: enterprise
+
+params:
+  # Enterprise domain configuration
+  base_domain: logs.enterprise.com
+  
+  # Multi-region configuration
+  primary_region: us-west-2
+  regions:
+    - us-west-2
+    - us-east-1
+  availability_zones:
+    - us-west-2a
+    - us-west-2b
+    - us-west-2c
+    - us-east-1a
+    - us-east-1b
+  cross_region_replication: true
+  minimum_master_nodes: 3
+  
+  # Enterprise scaling
+  elasticsearch_instances: 6
+  logstash_instances: 4
+  kibana_instances: 3
+  
+  # Performance optimization
+  elasticsearch_heap_size: 32g
+  logstash_heap_size: 16g
+  kibana_memory_limit: 4g
+  elasticsearch_thread_pool_size: 64
+  elasticsearch_bulk_queue_size: 1000
+  logstash_pipeline_workers: 16
+  logstash_pipeline_batch_size: 500
+  
+  # Storage configuration
+  s3_bucket: enterprise-logsearch-snapshots
+  s3_region: us-west-2
+  elasticsearch_disk_size: 2_000_000  # 2TB per node
+  
+  # Shield backup integration
+  shield_endpoint: https://shield.enterprise.com
+  shield_retention_policy: monthly
+  shield_backup_schedule: "daily 3am"
+  # Shield credentials stored in Vault:
+  # safe set secret/logsearch/enterprise/shield:agent_key "shield_agent_key"
+  
+  # OAuth authentication with Okta
+  oauth_provider: okta
+  oauth_discovery_url: https://enterprise.okta.com
+  oauth_authorized_domains:
+    - enterprise.com
+    - contractors.enterprise.com
+  oauth_admin_groups:
+    - platform-ops
+    - security-ops
+    - data-analytics
+  # OAuth credentials stored in Vault:
+  # safe set secret/logsearch/enterprise/oauth:client_id "okta_client_id"
+  # safe set secret/logsearch/enterprise/oauth:client_secret "okta_client_secret"
+  
+  # CloudFoundry integration
+  cf_system_domain: system.cf.enterprise.com
+  cf_apps_domain: apps.cf.enterprise.com
+  # CF credentials stored in Vault:
+  # safe set secret/logsearch/enterprise/cf:doppler_secret "doppler_shared_secret"
+  
+  # Monitoring configuration
+  prometheus_elasticsearch_exporter_port: 9114
+  prometheus_logstash_exporter_port: 9198
+  
+  # Enterprise timezone and locale
+  timezone: UTC
+  
+  # JVM optimization for enterprise workload
+  elasticsearch_jvm_options: |
+    -XX:+UseG1GC
+    -XX:G1HeapRegionSize=32m
+    -XX:+UnlockExperimentalVMOptions
+    -XX:+UseCGroupMemoryLimitForHeap
+    -XX:MaxGCPauseMillis=200
+  
+  logstash_jvm_options: |
+    -XX:+UseG1GC
+    -XX:G1HeapRegionSize=16m
+    -XX:MaxGCPauseMillis=100
+
+# Required Vault secrets:
+# safe set secret/logsearch/enterprise/s3:access_key_id "AKIA..."
+# safe set secret/logsearch/enterprise/s3:secret_access_key "..."
+# safe set secret/logsearch/enterprise/oauth:client_id "okta_client_id"
+# safe set secret/logsearch/enterprise/oauth:client_secret "okta_client_secret"
+# safe set secret/logsearch/enterprise/shield:agent_key "shield_agent_key"
+# safe set secret/logsearch/enterprise/cf:doppler_secret "doppler_shared_secret"
+
+# Deployment commands:
+# genesis new enterprise
+# genesis deploy enterprise
+# genesis do enterprise -- es-health
+# genesis do enterprise -- backup
+# genesis do enterprise -- visit-kibana

@@ -1,0 +1,50 @@
+---
+# Prometheus monitoring integration for OCFP Logsearch
+params:
+  prometheus_exporter_enabled: true
+  prometheus_exporter_port: 9114
+  
+  # Prometheus endpoints from vault
+  prometheus_pushgateway_url: (( vault meta.ocfp.vault.config "/prometheus:pushgateway_url" ))
+  prometheus_alertmanager_url: (( vault meta.ocfp.vault.config "/prometheus:alertmanager_url" ))
+
+instance_groups:
+  - name: elasticsearch
+    jobs:
+      - name: elasticsearch_exporter
+        release: prometheus
+        properties:
+          elasticsearch_exporter:
+            es:
+              uri: "http://localhost:9200"
+              all: true
+              indices: true
+              indices_settings: true
+              shards: true
+              snapshots: true
+              timeout: 30s
+            web:
+              port: (( grab params.prometheus_exporter_port ))
+              telemetry_path: "/metrics"
+  
+  - name: logstash
+    jobs:
+      - name: logstash_exporter  
+        release: prometheus
+        properties:
+          logstash_exporter:
+            logstash:
+              url: "http://localhost:9600"
+            web:
+              port: 9198
+              
+  - name: kibana
+    jobs:
+      - name: kibana_exporter
+        release: prometheus
+        properties:
+          kibana_exporter:
+            kibana:
+              uri: "http://localhost:5601"
+            web:
+              port: 9684

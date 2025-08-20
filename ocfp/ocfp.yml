@@ -1,0 +1,46 @@
+---
+params:
+  # Base domain comes from vault
+  base_domain: (( vault meta.ocfp.vault.config "/domains:base" ))
+  
+  # Availability zones
+  availability_zones:
+    - (( concat meta.ocfp.env.cloud "z1" ))
+    - (( concat meta.ocfp.env.cloud "z2" ))
+    - (( concat meta.ocfp.env.cloud "z3" ))
+
+  # Security groups
+  default_security_groups:
+    - (( concat meta.ocfp.env.cloud "sg-default" ))
+    - (( concat meta.ocfp.env.cloud "sg-logsearch" ))
+
+  # TLS/SSL configuration
+  skip_ssl_validation: false
+  
+  # Curator settings for log retention
+  curator_retention_days: (( meta.ocfp.env.scale == "prod" ? 30 : 7 ))
+  curator_delete_indices_older_than: (( meta.ocfp.env.scale == "prod" ? 90 : 30 ))
+  
+  # Elasticsearch cluster settings
+  elasticsearch_cluster_name: (( concat genesis.env "-logsearch" ))
+  elasticsearch_minimum_master_nodes: (( meta.ocfp.env.scale == "prod" ? 3 : 2 ))
+  
+  # Index management
+  elasticsearch_number_of_shards: (( meta.ocfp.env.scale == "prod" ? 5 : 3 ))
+  elasticsearch_number_of_replicas: (( meta.ocfp.env.scale == "prod" ? 2 : 1 ))
+  
+  # Performance tuning
+  elasticsearch_max_open_files: 65536
+  elasticsearch_max_map_count: 262144
+  
+  # Logstash pipeline settings
+  logstash_pipeline_workers: (( meta.ocfp.env.scale == "prod" ? 4 : 2 ))
+  logstash_pipeline_batch_size: (( meta.ocfp.env.scale == "prod" ? 250 : 125 ))
+  
+  # Kibana settings
+  kibana_default_app_id: "dashboard"
+  kibana_elasticsearch_request_timeout: 300000
+  
+  # Monitoring
+  enable_monitoring: true
+  monitoring_frequency: "30s"

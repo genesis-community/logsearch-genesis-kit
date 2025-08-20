@@ -1,0 +1,41 @@
+---
+# Internal Elasticsearch configuration for OCFP
+params:
+  # Elasticsearch master nodes
+  elasticsearch_master_instances: (( meta.ocfp.env.scale == "prod" ? 3 : 1 ))
+  elasticsearch_data_instances:   (( grab params.elasticsearch_instances ))
+  
+  # Node roles
+  elasticsearch_master_node_role: true
+  elasticsearch_data_node_role: true
+  elasticsearch_ingest_node_role: true
+  
+  # Discovery settings
+  elasticsearch_discovery_type: "zen"
+  elasticsearch_discovery_zen_ping_unicast_hosts: (( grab params.elasticsearch_ips ))
+  
+  # Recovery settings
+  elasticsearch_recovery_max_bytes_per_sec: "100mb"
+  elasticsearch_recovery_after_nodes: (( meta.ocfp.env.scale == "prod" ? 3 : 2 ))
+  elasticsearch_recovery_expected_nodes: (( grab params.elasticsearch_instances ))
+  elasticsearch_recovery_after_time: "5m"
+
+instance_groups:
+  - name: elasticsearch
+    instances: (( grab params.elasticsearch_instances ))
+    azs: (( grab params.availability_zones ))
+    persistent_disk_type: (( grab params.elasticsearch_data_disk_type ))
+    vm_type: (( grab params.elasticsearch_data_vm_type ))
+    stemcell: default
+    networks:
+      - name: (( grab params.logsearch_network ))
+        static_ips: (( grab params.elasticsearch_ips ))
+    jobs:
+      - name: elasticsearch
+        release: logsearch
+        properties:
+          elasticsearch:
+            node:
+              master: true
+              data: true
+              ingest: true

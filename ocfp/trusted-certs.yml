@@ -1,0 +1,28 @@
+---
+# Trusted certificates configuration for OCFP Logsearch
+params:
+  # Additional trusted CA certificates from vault
+  trusted_ca_certificates:
+    - (( vault meta.ocfp.vault.config "/ca-certs:org-ca" ))
+    - (( vault meta.ocfp.vault.config "/ca-certs:ocfp-ca" ))
+
+instance_groups:
+  - name: elasticsearch
+    env:
+      bosh:
+        trusted_certs: (( join "\n" params.trusted_ca_certificates ))
+  
+  - name: logstash
+    env:
+      bosh:
+        trusted_certs: (( join "\n" params.trusted_ca_certificates ))
+  
+  - name: kibana
+    env:
+      bosh:
+        trusted_certs: (( join "\n" params.trusted_ca_certificates ))
+  
+  - name: maintenance
+    env:
+      bosh:
+        trusted_certs: (( join "\n" params.trusted_ca_certificates ))

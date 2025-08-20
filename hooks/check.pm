@@ -22,6 +22,11 @@ sub perform {
   my ($self) = @_;
   my $ok = 1;
 
+  # Skip cloud config checks for OCFP
+  if ($self->want_feature('ocfp')) {
+    return $self->check_result('cloud-config', 'skipped', "OCFP env manages its own cloud-config");
+  }
+
   # Cloud Config checks
   if ($ENV{GENESIS_CLOUD_CONFIG}) {
     $ok = 0 unless $self->check_cloud_config();

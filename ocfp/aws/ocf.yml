@@ -1,0 +1,21 @@
+---
+# AWS-specific OCFP configuration
+params:
+  # AWS load balancer configuration
+  aws_lb_target_groups:
+    elasticsearch: ocfp-ocf-elasticsearch-lb-tg
+    kibana: ocfp-ocf-kibana-lb-tg
+    logstash: ocfp-ocf-logstash-lb-tg
+
+instance_groups:
+  - name: elasticsearch
+    vm_extensions:
+      - (( grab params.aws_lb_target_groups.elasticsearch ))
+      
+  - name: kibana
+    vm_extensions:
+      - (( grab params.aws_lb_target_groups.kibana ))
+      
+  - name: logstash
+    vm_extensions:
+      - (( grab params.aws_lb_target_groups.logstash ))
