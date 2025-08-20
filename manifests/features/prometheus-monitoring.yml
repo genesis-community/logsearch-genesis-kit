@@ -1,0 +1,131 @@
+# Prometheus Monitoring Feature
+# Adds Prometheus exporters for monitoring Elasticsearch, Logstash, and Kibana
+
+# Add Elasticsearch exporter to master nodes
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch_exporter
+    release: logsearch
+    properties:
+      elasticsearch_exporter:
+        listen_port: (( grab params.prometheus_elasticsearch_exporter_port || 9114 ))
+        elasticsearch_url: "https://localhost:9200"
+        tls:
+          ca_certificate: (( vault meta.vault "/certs/ca:certificate" ))
+          skip_ssl_verify: false
+        metrics:
+          cluster: true
+          indices: true
+          nodes: true
+          shards: true
+
+# Add Elasticsearch exporter to data nodes  
+instance_groups:
+- name: elasticsearch-data
+  jobs:
+  - name: elasticsearch_exporter
+    release: logsearch
+    properties:
+      elasticsearch_exporter:
+        listen_port: (( grab params.prometheus_elasticsearch_exporter_port || 9114 ))
+        elasticsearch_url: "https://localhost:9200"
+        tls:
+          ca_certificate: (( vault meta.vault "/certs/ca:certificate" ))
+          skip_ssl_verify: false
+        metrics:
+          cluster: false
+          indices: false
+          nodes: true
+          shards: false
+
+# Add Logstash exporter
+instance_groups:
+- name: logstash
+  jobs:
+  - name: logstash_exporter
+    release: logsearch
+    properties:
+      logstash_exporter:
+        listen_port: (( grab params.prometheus_logstash_exporter_port || 9198 ))
+        logstash_url: "http://localhost:9600"
+
+# Add Kibana monitoring (via Elasticsearch APIs)
+instance_groups:
+- name: kibana
+  jobs:
+  - name: kibana_exporter
+    release: logsearch
+    properties:
+      kibana_exporter:
+        listen_port: (( grab params.prometheus_kibana_exporter_port || 9684 ))
+        kibana_url: "http://localhost:5601"
+
+# Configure Elasticsearch to expose metrics
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        config_options:
+          http.cors.enabled: true
+          http.cors.allow-origin: "*"
+          http.cors.allow-headers: "X-Requested-With,Content-Type,Content-Length,Authorization"
+
+- name: elasticsearch-data
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        config_options:
+          http.cors.enabled: true
+          http.cors.allow-origin: "*"
+          http.cors.allow-headers: "X-Requested-With,Content-Type,Content-Length,Authorization"
+
+# Add node_exporter for system metrics
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: node_exporter
+    release: node-exporter
+    properties:
+      node_exporter:
+        listen_port: (( grab params.prometheus_node_exporter_port || 9100 ))
+
+- name: elasticsearch-data
+  jobs:
+  - name: node_exporter
+    release: node-exporter
+    properties:
+      node_exporter:
+        listen_port: (( grab params.prometheus_node_exporter_port || 9100 ))
+
+- name: logstash
+  jobs:
+  - name: node_exporter
+    release: node-exporter
+    properties:
+      node_exporter:
+        listen_port: (( grab params.prometheus_node_exporter_port || 9100 ))
+
+- name: kibana
+  jobs:
+  - name: node_exporter
+    release: node-exporter
+    properties:
+      node_exporter:
+        listen_port: (( grab params.prometheus_node_exporter_port || 9100 ))
+
+- name: maintenance
+  jobs:
+  - name: node_exporter
+    release: node-exporter
+    properties:
+      node_exporter:
+        listen_port: (( grab params.prometheus_node_exporter_port || 9100 ))
+
+# Add node-exporter release
+releases:
+- name: node-exporter
+  version: latest

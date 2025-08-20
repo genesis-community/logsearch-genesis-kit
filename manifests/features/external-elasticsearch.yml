@@ -1,0 +1,70 @@
+# External Elasticsearch Feature
+# Configures Logstash and Kibana to use an external Elasticsearch cluster
+# Removes internal Elasticsearch instance groups
+
+# Remove internal Elasticsearch instance groups
+instance_groups:
+- name: elasticsearch-master
+  instances: 0
+
+- name: elasticsearch-data
+  instances: 0
+
+# Configure Logstash to use external Elasticsearch
+instance_groups:
+- name: logstash
+  jobs:
+  - name: logstash
+    properties:
+      logstash:
+        outputs:
+        - elasticsearch:
+            hosts: (( grab params.external_elasticsearch_hosts ))
+            user: (( grab params.external_elasticsearch_username || "" ))
+            password: (( vault meta.vault "/external-elasticsearch:password" ))
+            ssl: true
+            ssl_certificate_verification: (( grab params.external_elasticsearch_ssl_verify || true ))
+            cacert: (( grab params.external_elasticsearch_ca_cert || "" ))
+
+# Configure Kibana to use external Elasticsearch
+instance_groups:
+- name: kibana
+  jobs:
+  - name: kibana
+    properties:
+      kibana:
+        elasticsearch:
+          hosts: (( grab params.external_elasticsearch_hosts ))
+          username: (( grab params.external_elasticsearch_username || "" ))
+          password: (( vault meta.vault "/external-elasticsearch:password" ))
+          ssl:
+            verificationMode: (( grab params.external_elasticsearch_ssl_verify || "full" ))
+            certificateAuthorities: (( grab params.external_elasticsearch_ca_cert || "" ))
+
+# Configure maintenance job for external cluster
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: elasticsearch_config
+    properties:
+      elasticsearch_config:
+        elasticsearch:
+          hosts: (( grab params.external_elasticsearch_hosts ))
+          username: (( grab params.external_elasticsearch_username || "" ))
+          password: (( vault meta.vault "/external-elasticsearch:password" ))
+          ssl: true
+          ca_certs: (( grab params.external_elasticsearch_ca_cert || "" ))
+  - name: curator
+    properties:
+      curator:
+        elasticsearch:
+          hosts: (( grab params.external_elasticsearch_hosts ))
+          username: (( grab params.external_elasticsearch_username || "" ))
+          password: (( vault meta.vault "/external-elasticsearch:password" ))
+          use_ssl: true
+          certificate: (( grab params.external_elasticsearch_ca_cert || "" ))
+
+# Update exodus for external cluster
+exodus:
+  elasticsearch_url: (( grab params.external_elasticsearch_hosts[0] ))
+  elasticsearch_external: true

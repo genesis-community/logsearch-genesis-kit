@@ -1,0 +1,200 @@
+# CloudFoundry Integration Feature
+# Configures Logstash for CloudFoundry log parsing and adds CF-specific dashboards
+
+instance_groups:
+- name: logstash
+  jobs:
+  - name: logstash
+    properties:
+      logstash:
+        filters: |
+          # CloudFoundry log parsing filters
+          if [syslog_program] == "vcap.metron_agent" {
+            # Parse Metron Agent logs
+            json {
+              source => "syslog_message"
+              target => "metron"
+            }
+            
+            if [metron][event_type] == "LogMessage" {
+              mutate {
+                rename => { "[metron][origin]" => "[@source][component]" }
+                rename => { "[metron][deployment]" => "[@source][deployment]" }
+                rename => { "[metron][job]" => "[@source][job]" }
+                rename => { "[metron][index]" => "[@source][index]" }
+                rename => { "[metron][ip]" => "[@source][host]" }
+              }
+              
+              # Parse log message
+              if [metron][sourceType] == "APP" {
+                mutate {
+                  add_field => { "[@source][type]" => "cf_app" }
+                  add_field => { "[@source][app_id]" => "%{[metron][sourceInstance]}" }
+                }
+              } else if [metron][sourceType] == "RTR" {
+                mutate {
+                  add_field => { "[@source][type]" => "cf_router" }
+                }
+                grok {
+                  match => { "[metron][message]" => "%{HOSTNAME:request_host} - \[%{TIMESTAMP_ISO8601:request_timestamp}\] \"%{WORD:request_method} %{URIPATHPARAM:request_path} %{DATA:request_protocol}\" %{INT:response_status} %{INT:response_size} %{INT:response_time}" }
+                }
+              } else {
+                mutate {
+                  add_field => { "[@source][type]" => "cf_platform" }
+                }
+              }
+              
+              # Set message field
+              mutate {
+                rename => { "[metron][message]" => "@message" }
+              }
+              
+              # Set timestamp
+              date {
+                match => [ "[metron][timestamp]", "UNIX_MS" ]
+              }
+            }
+            
+            # Clean up
+            mutate {
+              remove_field => [ "metron", "syslog_message" ]
+            }
+          }
+          
+          # Parse CF API logs
+          if [syslog_program] == "vcap.cloud_controller_ng" {
+            json {
+              source => "syslog_message"
+            }
+            mutate {
+              add_field => { "[@source][type]" => "cf_api" }
+              add_field => { "[@source][component]" => "cloud_controller_ng" }
+            }
+          }
+          
+          # Parse CF UAA logs  
+          if [syslog_program] == "vcap.uaa" {
+            grok {
+              match => { "syslog_message" => "\[%{TIMESTAMP_ISO8601:uaa_timestamp}\] uaa - %{INT:pid} \[%{DATA:thread}\] .... %{LOGLEVEL:log_level} --- %{DATA:uaa_audit_message}" }
+            }
+            mutate {
+              add_field => { "[@source][type]" => "cf_uaa" }
+              add_field => { "[@source][component]" => "uaa" }
+            }
+          }
+          
+          # Parse BOSH Director logs
+          if [syslog_program] == "vcap.director" {
+            grok {
+              match => { "syslog_message" => "%{CHAR:log_level}, \[%{TIMESTAMP_ISO8601:bosh_timestamp}#%{INT:pid}\] %{LOGLEVEL:log_level} -- : %{DATA:bosh_message}" }
+            }
+            mutate {
+              add_field => { "[@source][type]" => "cf_bosh" }
+              add_field => { "[@source][component]" => "director" }
+            }
+          }
+
+# Configure maintenance job to load CF dashboards
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: kibana_dashboards
+    release: logsearch
+    properties:
+      kibana_dashboards:
+        elasticsearch_host: (( grab instance_groups.elasticsearch-master.networks[0].static_ips[0] ))
+        elasticsearch_port: 9200
+        dashboards:
+        - name: "CloudFoundry Overview"
+          file: "/var/vcap/packages/kibana_dashboards/cf-overview.json"
+        - name: "CloudFoundry Applications" 
+          file: "/var/vcap/packages/kibana_dashboards/cf-apps.json"
+        - name: "CloudFoundry Router"
+          file: "/var/vcap/packages/kibana_dashboards/cf-router.json"
+        - name: "CloudFoundry Platform"
+          file: "/var/vcap/packages/kibana_dashboards/cf-platform.json"
+
+# Add index templates for CF logs
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: elasticsearch_config
+    properties:
+      elasticsearch_config:
+        templates:
+        - name: cloudfoundry_logs
+          index_template:
+            index_patterns: ["cf-logs-*", "cloudfoundry-*"]
+            template:
+              settings:
+                number_of_shards: 5
+                number_of_replicas: 1
+                index.refresh_interval: "5s"
+              mappings:
+                properties:
+                  "@source":
+                    properties:
+                      type:
+                        type: keyword
+                      component:
+                        type: keyword
+                      deployment:
+                        type: keyword
+                      job:
+                        type: keyword
+                      app_id:
+                        type: keyword
+                  "@message":
+                    type: text
+                    analyzer: standard
+                  "@timestamp":
+                    type: date
+                  log_level:
+                    type: keyword
+                  request_host:
+                    type: keyword
+                  request_method:
+                    type: keyword
+                  request_path:
+                    type: keyword
+                  response_status:
+                    type: integer
+                  response_time:
+                    type: integer
+
+# Configure CF-specific retention policy
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: curator
+    properties:
+      curator:
+        actions:
+          delete_cf_app_indices:
+            action: delete_indices
+            description: "Delete CF application indices older than 7 days"
+            options:
+              ignore_empty_list: true
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: cf-logs-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.cf_app_retention_days || 7 ))
+          delete_cf_platform_indices:
+            action: delete_indices
+            description: "Delete CF platform indices older than 30 days"
+            options:
+              ignore_empty_list: true
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: cloudfoundry-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.cf_platform_retention_days || 30 ))

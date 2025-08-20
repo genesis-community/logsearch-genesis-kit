@@ -1,0 +1,179 @@
+# Curator Addon
+# Enhanced index lifecycle management with additional curator actions
+
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: curator
+    properties:
+      curator:
+        actions:
+          # Age-based index deletion
+          delete_old_indices:
+            action: delete_indices
+            description: "Delete indices older than specified retention period"
+            options:
+              ignore_empty_list: true
+              timeout_override: 300
+              continue_if_exception: false
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.index_retention_days || 30 ))
+              
+          # Size-based index deletion
+          delete_large_indices:
+            action: delete_indices
+            description: "Delete indices larger than specified size"
+            options:
+              ignore_empty_list: true
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: space
+              disk_space: (( grab params.max_index_size_gb || 50 ))
+              use_age: true
+              source: creation_date
+              
+          # Index optimization/force merge
+          optimize_indices:
+            action: forcemerge
+            description: "Force merge indices older than 2 days"
+            options:
+              max_num_segments: 1
+              delay: 120
+              timeout_override: 21600
+              continue_if_exception: false
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: 2
+              
+          # Index allocation modification
+          hot_to_warm:
+            action: allocation
+            description: "Move indices older than 7 days to warm nodes"
+            options:
+              key: box_type
+              value: warm
+              allocation_type: include
+              wait_for_completion: false
+              timeout_override: 300
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.warm_transition_days || 7 ))
+              
+          # Close old indices
+          close_indices:
+            action: close
+            description: "Close indices older than specified period"
+            options:
+              ignore_empty_list: true
+              skip_flush: false
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.close_indices_days || 60 ))
+              
+          # Replica count management
+          reduce_replicas:
+            action: replicas
+            description: "Reduce replica count for old indices"
+            options:
+              count: 0
+              wait_for_completion: false
+              timeout_override: 300
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.reduce_replicas_days || 14 ))
+              
+          # Create periodic snapshots
+          create_snapshot:
+            action: snapshot
+            description: "Create weekly snapshots"
+            options:
+              repository: (( grab params.snapshot_repository || "backup" ))
+              name: "weekly-snapshot-%Y%W"
+              ignore_unavailable: false
+              include_global_state: true
+              partial: false
+              wait_for_completion: true
+              skip_repo_fs_check: false
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: period
+              period_type: absolute
+              source: name
+              range_from: -1
+              range_to: -1
+              date_from: (( grab params.snapshot_start_date || "2024-01-01" ))
+              date_to: (( grab params.snapshot_end_date || "2030-12-31" ))
+              date_from_format: "%Y-%m-%d"
+              date_to_format: "%Y-%m-%d"
+              unit: weeks
+              week_starts_on: monday
+              
+          # Delete old snapshots
+          delete_snapshots:
+            action: delete_snapshots
+            description: "Delete snapshots older than specified period"
+            options:
+              repository: (( grab params.snapshot_repository || "backup" ))
+              ignore_empty_list: true
+              timeout_override: 300
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: weekly-snapshot-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: weeks
+              unit_count: (( grab params.snapshot_retention_weeks || 12 ))
+              
+        # Curator configuration
+        client:
+          hosts: (( grab instance_groups.elasticsearch-master.networks[0].static_ips ))
+          port: 9200
+          url_prefix: ""
+          use_ssl: true
+          certificate: (( vault meta.vault "/certs/ca:certificate" ))
+          ssl_no_validate: false
+          timeout: 30
+          master_only: false
+          
+        logging:
+          loglevel: INFO
+          logfile: /var/vcap/sys/log/curator/curator.log
+          logformat: default
+          blacklist: ['elasticsearch', 'urllib3']

@@ -1,0 +1,81 @@
+# S3 Blobstore Feature
+# Configures AWS S3 for Elasticsearch snapshots and backups
+
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: elasticsearch_config
+    properties:
+      elasticsearch_config:
+        templates:
+        - name: s3_repository
+          repository:
+            type: s3
+            settings:
+              bucket: (( grab params.s3_bucket ))
+              region: (( grab params.s3_region || "us-east-1" ))
+              access_key: (( vault meta.vault "/s3:access_key_id" ))
+              secret_key: (( vault meta.vault "/s3:secret_access_key" ))
+              base_path: (( grab params.s3_base_path || "elasticsearch-snapshots" ))
+              server_side_encryption: true
+              storage_class: (( grab params.s3_storage_class || "STANDARD_IA" ))
+
+# Add S3 repository plugin to Elasticsearch nodes
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        plugins:
+        - repository-s3
+        config_options:
+          s3.client.default.endpoint: (( grab params.s3_endpoint || "" ))
+          s3.client.default.protocol: https
+
+- name: elasticsearch-data  
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        plugins:
+        - repository-s3
+        config_options:
+          s3.client.default.endpoint: (( grab params.s3_endpoint || "" ))
+          s3.client.default.protocol: https
+
+# Configure automated snapshots via curator
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: curator
+    properties:
+      curator:
+        actions:
+          create_snapshot:
+            action: snapshot
+            description: "Create daily snapshots to S3"
+            options:
+              repository: s3_repository
+              name: "snapshot-%Y%m%d%H%M%S"
+              ignore_unavailable: false
+              include_global_state: true
+              partial: false
+              wait_for_completion: true
+              skip_repo_fs_check: false
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+          delete_snapshots:
+            action: delete_snapshots  
+            description: "Delete snapshots older than 90 days"
+            options:
+              repository: s3_repository
+              ignore_empty_list: true
+            filters:
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.snapshot_retention_days || 90 ))

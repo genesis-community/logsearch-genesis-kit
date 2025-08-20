@@ -1,0 +1,146 @@
+# Custom Parsers Addon
+# Provides additional Logstash parsing rules for common log formats
+
+instance_groups:
+- name: logstash
+  jobs:
+  - name: logstash
+    properties:
+      logstash:
+        filters: |
+          # Add custom parsing filters
+          if "nginx" in [tags] {
+            grok {
+              match => { 
+                "message" => "%{IPORHOST:clientip} %{USER:ident} %{USER:auth} \[%{HTTPDATE:timestamp}\] \"%{WORD:verb} %{URIPATHPARAM:request} HTTP/%{NUMBER:httpversion}\" %{NUMBER:response} (?:%{NUMBER:bytes}|-) (?:\"(?:%{URI:referrer}|-)\"|%{QS:referrer}) %{QS:agent}" 
+              }
+            }
+            date {
+              match => [ "timestamp", "dd/MMM/yyyy:HH:mm:ss Z" ]
+            }
+            mutate {
+              convert => { "response" => "integer" }
+              convert => { "bytes" => "integer" }
+            }
+          }
+          
+          if "apache" in [tags] {
+            grok {
+              match => { 
+                "message" => "%{COMBINEDAPACHELOG}" 
+              }
+            }
+            date {
+              match => [ "timestamp", "dd/MMM/yyyy:HH:mm:ss Z" ]
+            }
+            mutate {
+              convert => { "response" => "integer" }
+              convert => { "bytes" => "integer" }
+            }
+          }
+          
+          if "syslog" in [tags] {
+            grok {
+              match => { 
+                "message" => "<%{POSINT:syslog_pri}>%{SYSLOGTIMESTAMP:syslog_timestamp} %{IPORHOST:syslog_server} %{DATA:syslog_program}(?:\[%{POSINT:syslog_pid}\])?: %{GREEDYDATA:syslog_message}" 
+              }
+            }
+            date {
+              match => [ "syslog_timestamp", "MMM  d HH:mm:ss", "MMM dd HH:mm:ss" ]
+            }
+            mutate {
+              rename => { "syslog_message" => "@message" }
+            }
+          }
+          
+          if "haproxy" in [tags] {
+            grok {
+              match => { 
+                "message" => "%{HAPROXYHTTP}" 
+              }
+            }
+            date {
+              match => [ "haproxy_timestamp", "dd/MMM/yyyy:HH:mm:ss.SSS" ]
+            }
+            mutate {
+              convert => { "time_request" => "integer" }
+              convert => { "time_connect" => "integer" }
+              convert => { "time_response" => "integer" }
+              convert => { "time_total" => "integer" }
+              convert => { "http_status_code" => "integer" }
+              convert => { "bytes_read" => "integer" }
+            }
+          }
+          
+          if "java" in [tags] {
+            multiline {
+              pattern => "^%{TIMESTAMP_ISO8601}"
+              negate => true
+              what => "previous"
+            }
+            grok {
+              match => { 
+                "message" => "%{TIMESTAMP_ISO8601:timestamp} \[%{DATA:thread}\] %{LOGLEVEL:level} %{DATA:logger} - %{GREEDYDATA:logmessage}" 
+              }
+            }
+            date {
+              match => [ "timestamp", "yyyy-MM-dd HH:mm:ss,SSS" ]
+            }
+            mutate {
+              rename => { "logmessage" => "@message" }
+            }
+          }
+          
+          if "json" in [tags] {
+            json {
+              source => "message"
+            }
+            if [timestamp] {
+              date {
+                match => [ "timestamp", "ISO8601" ]
+              }
+            }
+          }
+
+# Add parser configurations for common services
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: elasticsearch_config
+    properties:
+      elasticsearch_config:
+        templates:
+        - name: parsed_logs
+          index_template:
+            index_patterns: ["parsed-*", "nginx-*", "apache-*", "java-*"]
+            template:
+              settings:
+                number_of_shards: 3
+                number_of_replicas: 1
+              mappings:
+                properties:
+                  "@timestamp":
+                    type: date
+                  "@message":
+                    type: text
+                    analyzer: standard
+                  clientip:
+                    type: ip
+                  response:
+                    type: integer
+                  bytes:
+                    type: long
+                  verb:
+                    type: keyword
+                  request:
+                    type: keyword
+                  agent:
+                    type: text
+                  referrer:
+                    type: keyword
+                  level:
+                    type: keyword
+                  logger:
+                    type: keyword
+                  thread:
+                    type: keyword

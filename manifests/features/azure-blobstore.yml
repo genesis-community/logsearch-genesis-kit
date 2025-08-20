@@ -1,0 +1,77 @@
+# Azure Blobstore Feature
+# Configures Azure Blob Storage for Elasticsearch snapshots and backups
+
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: elasticsearch_config
+    properties:
+      elasticsearch_config:
+        templates:
+        - name: azure_repository
+          repository:
+            type: azure
+            settings:
+              account: (( grab params.azure_storage_account ))
+              key: (( vault meta.vault "/azure:access_key" ))
+              container: (( grab params.azure_container || "elasticsearch-snapshots" ))
+              base_path: (( grab params.azure_base_path || "snapshots" ))
+              compress: true
+
+# Add Azure repository plugin to Elasticsearch nodes
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        plugins:
+        - repository-azure
+        config_options:
+          azure.client.default.account: (( grab params.azure_storage_account ))
+
+- name: elasticsearch-data  
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        plugins:
+        - repository-azure
+        config_options:
+          azure.client.default.account: (( grab params.azure_storage_account ))
+
+# Configure automated snapshots via curator
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: curator
+    properties:
+      curator:
+        actions:
+          create_snapshot:
+            action: snapshot
+            description: "Create daily snapshots to Azure Blob Storage"
+            options:
+              repository: azure_repository
+              name: "snapshot-%Y%m%d%H%M%S"
+              ignore_unavailable: false
+              include_global_state: true
+              partial: false
+              wait_for_completion: true
+              skip_repo_fs_check: false
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+          delete_snapshots:
+            action: delete_snapshots  
+            description: "Delete snapshots older than 90 days"
+            options:
+              repository: azure_repository
+              ignore_empty_list: true
+            filters:
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.snapshot_retention_days || 90 ))

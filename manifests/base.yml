@@ -1,0 +1,208 @@
+meta:
+  default:
+    azs: [z1, z2, z3]
+  domain: (( grab params.base_domain ))
+
+exodus:
+  kibana_url: (( concat "https://kibana." meta.domain ))
+  elasticsearch_url: (( concat "https://elasticsearch." meta.domain ":9200" ))
+  logstash_syslog_port: 5514
+
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    release: logsearch
+    properties:
+      elasticsearch:
+        cluster_name: (( grab params.cluster_name || "logsearch" ))
+        node:
+          allow_master: true
+          allow_data: false
+          allow_ingest: false
+        config_options:
+          xpack.security.enabled: false
+          network.host: 0.0.0.0
+          discovery.seed_hosts: (( grab instance_groups.elasticsearch-master.networks[0].static_ips ))
+          cluster.initial_master_nodes: (( grab instance_groups.elasticsearch-master.networks[0].static_ips ))
+        heap_size: (( grab params.elasticsearch_heap_size || "2g" ))
+        tls:
+          ca_certificate: (( vault meta.vault "/certs/ca:certificate" ))
+          certificate: (( vault meta.vault "/certs/elasticsearch:certificate" ))
+          private_key: (( vault meta.vault "/certs/elasticsearch:key" ))
+
+  instances: 3
+  azs: (( grab params.availability_zones || meta.default.azs ))
+  persistent_disk_type: (( grab params.elasticsearch_master_disk_type || "default" ))
+  vm_type: (( grab params.elasticsearch_master_vm_type || "medium" ))
+  stemcell: default
+  networks:
+  - name: (( grab params.logsearch_network || "logsearch" ))
+    static_ips: (( static_ips 0 1 2 ))
+
+- name: elasticsearch-data
+  jobs:
+  - name: elasticsearch
+    release: logsearch
+    properties:
+      elasticsearch:
+        cluster_name: (( grab params.cluster_name || "logsearch" ))
+        node:
+          allow_master: false
+          allow_data: true
+          allow_ingest: true
+        config_options:
+          xpack.security.enabled: false
+          network.host: 0.0.0.0
+          discovery.seed_hosts: (( grab instance_groups.elasticsearch-master.networks[0].static_ips ))
+          cluster.initial_master_nodes: (( grab instance_groups.elasticsearch-master.networks[0].static_ips ))
+        heap_size: (( grab params.elasticsearch_heap_size || "4g" ))
+        tls:
+          ca_certificate: (( vault meta.vault "/certs/ca:certificate" ))
+          certificate: (( vault meta.vault "/certs/elasticsearch:certificate" ))
+          private_key: (( vault meta.vault "/certs/elasticsearch:key" ))
+
+  instances: (( grab params.elasticsearch_instances || 3 ))
+  azs: (( grab params.availability_zones || meta.default.azs ))
+  persistent_disk_type: (( grab params.elasticsearch_data_disk_type || "large" ))
+  vm_type: (( grab params.elasticsearch_data_vm_type || "large" ))
+  stemcell: default
+  networks:
+  - name: (( grab params.logsearch_network || "logsearch" ))
+
+- name: logstash
+  jobs:
+  - name: logstash
+    release: logsearch
+    properties:
+      logstash:
+        heap_size: (( grab params.logstash_heap_size || "1g" ))
+        outputs:
+        - elasticsearch:
+            hosts: 
+            - (( concat instance_groups.elasticsearch-master.networks[0].static_ips[0] ":9200" ))
+            - (( concat instance_groups.elasticsearch-master.networks[0].static_ips[1] ":9200" ))
+            - (( concat instance_groups.elasticsearch-master.networks[0].static_ips[2] ":9200" ))
+        filters: (( grab params.logstash_filters || "[]" ))
+        tls:
+          ca_certificate: (( vault meta.vault "/certs/ca:certificate" ))
+          certificate: (( vault meta.vault "/certs/logstash:certificate" ))
+          private_key: (( vault meta.vault "/certs/logstash:key" ))
+  - name: syslog_ingestor  
+    release: logsearch
+    properties:
+      syslog_ingestor:
+        outputs:
+        - logstash: 
+            port: 5514
+
+  instances: (( grab params.logstash_instances || 2 ))
+  azs: (( grab params.availability_zones || meta.default.azs ))
+  vm_type: (( grab params.logstash_vm_type || "medium" ))
+  stemcell: default
+  networks:
+  - name: (( grab params.logsearch_network || "logsearch" ))
+
+- name: kibana
+  jobs:
+  - name: kibana
+    release: logsearch
+    properties:
+      kibana:
+        elasticsearch:
+          host: (( grab instance_groups.elasticsearch-master.networks[0].static_ips[0] ))
+          port: 9200
+          protocol: https
+        server:
+          host: 0.0.0.0
+          port: 5601
+        tls:
+          ca_certificate: (( vault meta.vault "/certs/ca:certificate" ))
+          certificate: (( vault meta.vault "/certs/kibana:certificate" ))
+          private_key: (( vault meta.vault "/certs/kibana:key" ))
+        config_options:
+          xpack.security.enabled: false
+
+  instances: (( grab params.kibana_instances || 1 ))
+  azs: (( grab params.availability_zones || meta.default.azs ))
+  vm_type: (( grab params.kibana_vm_type || "small" ))
+  stemcell: default
+  networks:
+  - name: (( grab params.logsearch_network || "logsearch" ))
+
+- name: maintenance
+  jobs:
+  - name: elasticsearch_config
+    release: logsearch
+    properties:
+      elasticsearch_config:
+        elasticsearch:
+          host: (( grab instance_groups.elasticsearch-master.networks[0].static_ips[0] ))
+          port: 9200
+          protocol: https
+        templates:
+        - name: index_template
+          index_template:
+            index_patterns: ["logs-*", "filebeat-*", "logstash-*"]
+            template:
+              settings:
+                number_of_shards: 3
+                number_of_replicas: 1
+              mappings:
+                properties:
+                  "@timestamp":
+                    type: date
+                  "@message":
+                    type: text
+                  "@source":
+                    type: keyword
+  - name: curator
+    release: logsearch
+    properties:
+      curator:
+        elasticsearch:
+          host: (( grab instance_groups.elasticsearch-master.networks[0].static_ips[0] ))
+          port: 9200
+          protocol: https
+        actions:
+          delete_indices:
+            action: delete_indices
+            description: "Delete indices older than 30 days"
+            options:
+              ignore_empty_list: true
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: 30
+
+  instances: 1
+  azs: (( grab params.availability_zones || ["z1"] ))
+  vm_type: (( grab params.maintenance_vm_type || "small" ))
+  stemcell: default
+  networks:
+  - name: (( grab params.logsearch_network || "logsearch" ))
+
+update:
+  serial: false
+  canaries: 1
+  canary_watch_time: 30000-120000
+  max_in_flight: 3
+  update_watch_time: 30000-120000
+
+stemcells:
+- alias: default
+  os: (( grab params.stemcell_os || "ubuntu-jammy" ))
+  version: (( grab params.stemcell_version || "latest" ))
+
+releases:
+- name: logsearch
+  version: 211.1.0
+  url: https://github.com/cloudfoundry-community/logsearch-boshrelease/releases/download/v211.1.0/logsearch-211.1.0.tgz
+  sha1: dddae14ab62eb1bccaeb7ab4fb5c7b5ec8c6e0db
+- name: bpm
+  version: latest

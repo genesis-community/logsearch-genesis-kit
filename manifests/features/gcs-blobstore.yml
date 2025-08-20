@@ -1,0 +1,76 @@
+# GCS Blobstore Feature
+# Configures Google Cloud Storage for Elasticsearch snapshots and backups
+
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: elasticsearch_config
+    properties:
+      elasticsearch_config:
+        templates:
+        - name: gcs_repository
+          repository:
+            type: gcs
+            settings:
+              bucket: (( grab params.gcs_bucket ))
+              service_account: (( vault meta.vault "/gcp:service_account_json" ))
+              base_path: (( grab params.gcs_base_path || "elasticsearch-snapshots" ))
+              compress: true
+
+# Add GCS repository plugin to Elasticsearch nodes
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        plugins:
+        - repository-gcs
+        config_options:
+          gcs.client.default.project_id: (( grab params.gcp_project_id ))
+
+- name: elasticsearch-data  
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        plugins:
+        - repository-gcs
+        config_options:
+          gcs.client.default.project_id: (( grab params.gcp_project_id ))
+
+# Configure automated snapshots via curator
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: curator
+    properties:
+      curator:
+        actions:
+          create_snapshot:
+            action: snapshot
+            description: "Create daily snapshots to Google Cloud Storage"
+            options:
+              repository: gcs_repository
+              name: "snapshot-%Y%m%d%H%M%S"
+              ignore_unavailable: false
+              include_global_state: true
+              partial: false
+              wait_for_completion: true
+              skip_repo_fs_check: false
+            filters:
+            - filtertype: pattern
+              kind: prefix
+              value: logs-
+          delete_snapshots:
+            action: delete_snapshots  
+            description: "Delete snapshots older than 90 days"
+            options:
+              repository: gcs_repository
+              ignore_empty_list: true
+            filters:
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.snapshot_retention_days || 90 ))

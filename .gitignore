@@ -1,0 +1,6 @@
+*.tar.gz
+.DS_Store
+*.log
+tmp
+spec/results/
+spec/bin/

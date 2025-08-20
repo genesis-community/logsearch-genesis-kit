@@ -1,0 +1,78 @@
+# Small Footprint Feature
+# Reduces resource requirements for development and testing environments
+
+meta:
+  small-footprint: true
+
+# Reduce instance counts for minimal deployment
+instance_groups:
+- name: elasticsearch-master
+  instances: 1
+
+- name: elasticsearch-data  
+  instances: 1
+
+- name: logstash
+  instances: 1
+
+- name: kibana
+  instances: 1
+
+# Use smaller VM types
+params:
+  elasticsearch_master_vm_type: (( grab params.elasticsearch_master_vm_type || "small" ))
+  elasticsearch_data_vm_type: (( grab params.elasticsearch_data_vm_type || "small" ))
+  logstash_vm_type: (( grab params.logstash_vm_type || "small" ))
+  kibana_vm_type: (( grab params.kibana_vm_type || "small" ))
+  maintenance_vm_type: (( grab params.maintenance_vm_type || "small" ))
+
+# Reduce heap sizes for smaller VMs
+instance_groups:
+- name: elasticsearch-master
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        heap_size: (( grab params.elasticsearch_heap_size || "1g" ))
+        config_options:
+          # Single node cluster for development
+          discovery.type: single-node
+          cluster.initial_master_nodes: ~
+
+- name: elasticsearch-data
+  jobs:
+  - name: elasticsearch
+    properties:
+      elasticsearch:
+        heap_size: (( grab params.elasticsearch_heap_size || "1g" ))
+
+- name: logstash
+  jobs:
+  - name: logstash
+    properties:
+      logstash:
+        heap_size: (( grab params.logstash_heap_size || "512m" ))
+
+# Use smaller persistent disks
+instance_groups:
+- name: elasticsearch-master
+  persistent_disk_type: (( grab params.elasticsearch_master_disk_type || "small" ))
+
+- name: elasticsearch-data
+  persistent_disk_type: (( grab params.elasticsearch_data_disk_type || "small" ))
+
+# Adjust curator retention for smaller environments
+instance_groups:
+- name: maintenance
+  jobs:
+  - name: curator
+    properties:
+      curator:
+        actions:
+          delete_indices:
+            filters:
+            - filtertype: age
+              source: creation_date
+              direction: older
+              unit: days
+              unit_count: (( grab params.curator_retention_days || 7 ))  # Shorter retention

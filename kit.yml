@@ -1,0 +1,96 @@
+---
+name: logsearch
+version: 1.0.0
+
+author:
+  - Genesis Community <genesis@starkandwayne.com>
+code:   https://github.com/genesis-community/logsearch-genesis-kit
+docs:   https://github.com/genesis-community/logsearch-genesis-kit/blob/main/MANUAL.md
+
+genesis_version_min: 2.8.12
+
+supports:
+- aws
+- azure
+- gcp
+- openstack
+- vsphere
+
+required_configs:
+  blueprint: []
+
+certificates:
+  base:
+    certs:
+      ca: { valid_for: 10y }
+      elasticsearch:
+        valid_for: 2y
+        names:
+          - "*.elasticsearch.${params.base_domain}"
+          - "elasticsearch.${params.base_domain}"
+          - "*.es.${params.base_domain}"
+          - "es.${params.base_domain}"
+          - 127.0.0.1
+          - localhost
+      kibana:
+        valid_for: 2y
+        names:
+          - "kibana.${params.base_domain}"
+          - "*.kibana.${params.base_domain}"
+          - 127.0.0.1
+          - localhost
+      logstash:
+        valid_for: 2y
+        names:
+          - "logstash.${params.base_domain}"
+          - "*.logstash.${params.base_domain}"
+          - 127.0.0.1
+          - localhost
+
+credentials:
+  base:
+    elasticsearch/admin_username:
+      description: Admin username for Elasticsearch
+    elasticsearch/admin_password:
+      description: Admin password for Elasticsearch
+    elasticsearch/cluster_bootstrap_password:
+      description: Bootstrap password for Elasticsearch cluster setup
+    kibana/system_username:
+      description: System username for Kibana service
+    kibana/system_password:
+      description: System password for Kibana service
+    logstash/system_username:
+      description: System username for Logstash service
+    logstash/system_password:
+      description: System password for Logstash service
+    logsearch/cluster_auth_token:
+      description: Internal cluster authentication token
+
+params:
+  base:
+    base_domain:
+      description: Base domain for Logsearch components (e.g., example.com)
+    elasticsearch_instances:
+      description: Number of Elasticsearch nodes to deploy
+      default: 3
+    logstash_instances:
+      description: Number of Logstash instances to deploy
+      default: 2
+    kibana_instances:
+      description: Number of Kibana instances to deploy
+      default: 1
+    elasticsearch_heap_size:
+      description: JVM heap size for Elasticsearch nodes (e.g., 2g)
+      default: "2g"
+    logstash_heap_size:
+      description: JVM heap size for Logstash instances (e.g., 1g)
+      default: "1g"
+    vault:
+      description: Vault path for secrets storage
+      default: "secret/logsearch"
+
+boshrelease:
+  - name: logsearch
+    version: 211.1.0
+    url: https://github.com/cloudfoundry-community/logsearch-boshrelease/releases/download/v211.1.0/logsearch-211.1.0.tgz
+    sha1: dddae14ab62eb1bccaeb7ab4fb5c7b5ec8c6e0db
