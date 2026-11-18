@@ -24,7 +24,7 @@ in cloud-native environments.
 ## Quick Start
 
 To use it, you don't even need to clone this repository! Just run
-the following (using Genesis v2.8.12+):
+the following (using Genesis v3.1.0+):
 
 ```bash
 # create a logsearch-deployments repo using the latest version of the logsearch kit

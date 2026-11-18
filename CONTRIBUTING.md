@@ -10,7 +10,7 @@ your interactions with the project.
 ## Pull Request Process
 
 1. Ensure that the Kit still compiles, and can be deployed using a
-   recent vintage of the Genesis CLI (v2.8.12+).
+   recent vintage of the Genesis CLI (v3.1.0+).
 
 2. All hooks must follow Genesis Perl conventions:
    - Use `underscore_names` (not camelCase)
@@ -41,7 +41,7 @@ your interactions with the project.
 
 ### Prerequisites
 
-- Genesis CLI v2.8.12+
+- Genesis CLI v3.1.0+
 - BOSH CLI v2+
 - Go 1.19+ (for running tests)
 - Perl 5.14+ with required modules

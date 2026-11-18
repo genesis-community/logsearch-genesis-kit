@@ -20,7 +20,7 @@ instructions, configuration options, and operational procedures.
 Before deploying Logsearch, ensure you have:
 
 - A working BOSH Director (v270+)
-- Genesis CLI (v2.8.12+)
+- Genesis CLI (v3.1.0+)
 - A Genesis Vault or Credhub instance for secrets
 - Cloud config with appropriate VM types, networks, and disk types
 - DNS configuration for your base domain

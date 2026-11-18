@@ -7,7 +7,7 @@ author:
 code:   https://github.com/genesis-community/logsearch-genesis-kit
 docs:   https://github.com/genesis-community/logsearch-genesis-kit/blob/main/MANUAL.md
 
-genesis_version_min: 2.8.12
+genesis_version_min: 3.1.0
 
 supports:
 - aws
